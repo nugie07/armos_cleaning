@@ -1,0 +1,13 @@
+# Database A (Main Database)
+DB_A_HOST=localhost
+DB_A_PORT=5432
+DB_A_NAME=main_database
+DB_A_USER=your_username
+DB_A_PASSWORD=your_password
+
+# Database B (Warehouse Cleaning Database)
+DB_B_HOST=localhost
+DB_B_PORT=5432
+DB_B_NAME=warehouse_cleaning
+DB_B_USER=your_username
+DB_B_PASSWORD=your_password 
