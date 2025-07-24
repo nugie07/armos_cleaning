@@ -31,18 +31,30 @@ git clone <repository-url>
 cd ordercleaning
 ```
 
-2. **Install dependencies**
+2. **Upgrade Python (Optional - untuk Python 3.11.5)**
 ```bash
+chmod +x upgrade_python.sh
+./upgrade_python.sh
+```
+
+3. **Install dependencies**
+```bash
+# Menggunakan script otomatis
+./start.sh
+
+# Atau manual
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-3. **Setup environment variables**
+4. **Setup environment variables**
 ```bash
 cp env_example.txt .env
 # Edit .env file dengan konfigurasi database Anda
 ```
 
-4. **Create database tables**
+5. **Create database tables**
 ```bash
 python scripts/create_tables.py
 ```
@@ -72,7 +84,11 @@ DB_B_PASSWORD=your_password
 ### 1. Menjalankan API Server
 
 ```bash
-python api/main.py
+# Menggunakan script (otomatis detect Python 3.11.5, 3.9, atau 3.8)
+./start.sh
+
+# Atau manual
+python run.py
 ```
 
 Server akan berjalan di `http://localhost:8000`
@@ -81,19 +97,19 @@ Server akan berjalan di `http://localhost:8000`
 
 ```bash
 # Mode interaktif
-python cli/main.py interactive-mode
+./cli_tool.sh interactive-mode
 
 # Compare data by date range
-python cli/main.py compare-data --start-date 2025-01-01 --end-date 2025-01-31
+./cli_tool.sh compare-data --start-date 2025-01-01 --end-date 2025-01-31
 
 # Create payload for specific do_number
-python cli/main.py create-payload B01SI2507-1602
+./cli_tool.sh create-payload B01SI2507-1602
 
 # List payload results
-python cli/main.py list-payloads --limit 10
+./cli_tool.sh list-payloads --limit 10
 
 # Get specific payload
-python cli/main.py get-payload B01SI2507-1602
+./cli_tool.sh get-payload B01SI2507-1602
 ```
 
 ### 3. API Endpoints

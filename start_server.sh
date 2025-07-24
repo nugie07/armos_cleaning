@@ -17,9 +17,12 @@ python3 --version
 # Check if virtual environment exists
 if [ ! -d "venv" ]; then
     echo "Creating virtual environment..."
-    python3 -m venv venv
-    if [ $? -eq 0 ]; then
-        echo "✅ Virtual environment created successfully"
+    if command -v python3.11 &> /dev/null; then
+        python3.11 -m venv venv
+        echo "✅ Created virtual environment with Python 3.11.5"
+    elif command -v python3 &> /dev/null; then
+        python3 -m venv venv
+        echo "✅ Created virtual environment with Python 3"
     else
         echo "❌ Failed to create virtual environment"
         exit 1

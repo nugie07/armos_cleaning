@@ -67,7 +67,10 @@ cd armos_cleaning
 
 # Create virtual environment
 echo "🔧 Creating virtual environment..."
-if command -v python3.9 &> /dev/null; then
+if command -v python3.11 &> /dev/null; then
+    python3.11 -m venv venv
+    echo "✅ Using Python 3.11.5"
+elif command -v python3.9 &> /dev/null; then
     python3.9 -m venv venv
     echo "✅ Using Python 3.9"
 else

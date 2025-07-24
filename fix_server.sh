@@ -24,9 +24,13 @@ fi
 
 # Create new virtual environment
 echo "🔧 Creating new virtual environment..."
-python3 -m venv venv
-
-if [ $? -ne 0 ]; then
+if command -v python3.11 &> /dev/null; then
+    python3.11 -m venv venv
+    echo "✅ Created virtual environment with Python 3.11.5"
+elif command -v python3 &> /dev/null; then
+    python3 -m venv venv
+    echo "✅ Created virtual environment with Python 3"
+else
     echo "❌ Failed to create virtual environment"
     echo "Trying to install python3-venv..."
     if command -v apt &> /dev/null; then

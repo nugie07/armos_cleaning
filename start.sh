@@ -13,7 +13,10 @@ fi
 # Check if virtual environment exists
 if [ ! -d "venv" ]; then
     echo "Creating virtual environment..."
-    if command -v python3.9 &> /dev/null; then
+    if command -v python3.11 &> /dev/null; then
+        python3.11 -m venv venv
+        echo "✅ Created virtual environment with Python 3.11.5"
+    elif command -v python3.9 &> /dev/null; then
         python3.9 -m venv venv
         echo "✅ Created virtual environment with Python 3.9"
     elif command -v python3 &> /dev/null; then
