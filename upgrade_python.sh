@@ -25,7 +25,23 @@ if [[ "$OS" == *"Ubuntu"* ]] || [[ "$OS" == *"Debian"* ]]; then
     sudo apt install -y software-properties-common
     sudo add-apt-repository ppa:deadsnakes/ppa -y
     sudo apt update
-    sudo apt install -y python3.11 python3.11-venv python3.11-dev python3.11-pip python3.11-distutils
+    
+    # Install Python 3.11 packages (handle missing packages gracefully)
+    echo "📦 Installing Python 3.11 packages..."
+    sudo apt install -y python3.11 python3.11-venv python3.11-dev python3.11-distutils || {
+        echo "⚠️ Some Python 3.11 packages not available, trying alternative installation..."
+        sudo apt install -y python3.11 python3.11-venv python3.11-dev || {
+            echo "❌ Failed to install Python 3.11 packages"
+            exit 1
+        }
+    }
+    
+    # Install pip for Python 3.11 if not available
+    if ! command -v pip3.11 &> /dev/null; then
+        echo "📦 Installing pip for Python 3.11..."
+        curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+    fi
+    
     sudo apt install -y build-essential libssl-dev libffi-dev libpq-dev
     
 elif [[ "$OS" == *"CentOS"* ]] || [[ "$OS" == *"Red Hat"* ]]; then
