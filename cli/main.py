@@ -5,11 +5,16 @@ CLI Interface for Order Cleaning Application
 import click
 import requests
 import json
+import os
 from datetime import datetime
 from typing import List, Dict, Any
+from dotenv import load_dotenv
 
-# API Base URL
-API_BASE_URL = "http://localhost:8000"
+# Load environment variables
+load_dotenv()
+
+# API Base URL from environment variable
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 def make_request(method: str, endpoint: str, data: Dict = None) -> Dict:
     """Make HTTP request to API"""

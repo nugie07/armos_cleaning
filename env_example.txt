@@ -10,4 +10,7 @@ DB_B_HOST=localhost
 DB_B_PORT=5432
 DB_B_NAME=warehouse_cleaning
 DB_B_USER=your_username
-DB_B_PASSWORD=your_password 
+DB_B_PASSWORD=your_password
+
+# API Configuration
+API_BASE_URL=http://34.50.67.24:8000 
