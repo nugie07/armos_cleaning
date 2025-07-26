@@ -1,262 +1,220 @@
-# Order Cleaning Application
+# Database Operations Script
 
-Aplikasi Python untuk memperbaiki data order yang hilang antara Database A (main database) dan Database B (warehouse cleaning database).
+Script untuk operasi database yang mencakup pembuatan tabel, copy data order, dan copy data product dari Database A ke Database B.
 
-## Fitur Utama
+## Fitur
 
-1. **Perbandingan Data**: Membandingkan data order antara Database A dan Database B berdasarkan rentang tanggal
-2. **Deteksi Discrepancy**: Menemukan perbedaan jumlah item antara kedua database
-3. **Pembuatan Payload**: Membuat payload JSON sesuai format yang diperlukan untuk memperbaiki data
-4. **Penyimpanan Hasil**: Menyimpan hasil cleaning di Database B untuk tracking
-5. **API REST**: Endpoint API untuk integrasi dengan aplikasi lain
-6. **CLI Interface**: Command line interface untuk operasi manual
+1. **Environment Configuration** - Pengaturan untuk 2 database (A dan B)
+2. **Table Creation** - Pembuatan tabel baru di database B
+3. **Data Copy** - Copy data dengan range tanggal untuk order dan order_detail
+4. **Product Sync** - Copy data mst_product ke mst_product_main
+5. **Comprehensive Logging** - Log detail untuk setiap proses
+6. **Error Handling** - Retry mechanism dan error recovery
+7. **Batch Processing** - Processing data dalam batch untuk performa optimal
 
-## Struktur Database
+## Struktur Tabel
 
-### Database A (Main Database)
-- **Table `order`**: Data order utama
-- **Table `order_detail`**: Detail item untuk setiap order
+### order_main
+- order_id (SERIAL PRIMARY KEY)
+- faktur_id, faktur_date, delivery_date, do_number, status
+- skip_count, created_date, created_by, updated_date, updated_by
+- notes, customer_id, warehouse_id, delivery_type_id, order_integration_id
+- origin_name, origin_address_1, origin_address_2, origin_city, origin_zipcode
+- origin_phone, origin_email, destination_name, destination_address_1
+- destination_address_2, destination_city, destination_zip_code
+- destination_phone, destination_email, client_id, cancel_reason
+- rdo_integration_id, address_change, divisi, pre_status
 
-### Database B (Warehouse Cleaning Database)
-- **Table `cleansed_outbound_documents`**: Referensi dokumen order
-- **Table `cleansed_outbound_items`**: Referensi item order
-- **Table `cleansed_outbound_conversions`**: Referensi konversi unit
-- **Table `cleaning_payload_results`**: Hasil payload cleaning
+### order_detail_main
+- order_detail_id (SERIAL PRIMARY KEY)
+- quantity_faktur, net_price, quantity_wms, quantity_delivery
+- quantity_loading, quantity_unloading, status, cancel_reason, notes
+- order_id (FOREIGN KEY), product_id, unit_id, pack_id, line_id
+- unloading_latitude, unloading_longitude, origin_uom, origin_qty
+- total_ctn, total_pcs
+
+### mst_product_main
+- mst_product_id (SERIAL PRIMARY KEY)
+- sku (UNIQUE), height, width, length, name, price
+- type_product_id, qty, volume, weight, base_uom
+- pack_id, warehouse_id, synced_at, allocated_qty, available_qty
 
 ## Instalasi
 
-1. **Clone repository**
-```bash
-git clone <repository-url>
-cd ordercleaning
-```
+### Prerequisites
+- Python 3.7+
+- pip3
+- PostgreSQL database access
 
-2. **Upgrade Python (Optional - untuk Python 3.11.5)**
-```bash
-chmod +x upgrade_python.sh
-./upgrade_python.sh
-```
+### Setup
 
-3. **Install dependencies**
-```bash
-# Menggunakan script otomatis
-./start.sh
+1. **Clone atau download project ini**
 
-# Atau manual
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+2. **Install dependencies**
+   ```bash
+   pip3 install -r requirements.txt
+   ```
 
-4. **Setup environment variables**
-```bash
-cp env_example.txt .env
-# Edit .env file dengan konfigurasi database Anda
-```
+3. **Konfigurasi database**
+   Edit file `config.env` dengan konfigurasi database Anda:
+   ```env
+   # Database A Configuration
+   DB_A_HOST=localhost
+   DB_A_PORT=5432
+   DB_A_NAME=database_a
+   DB_A_USER=username_a
+   DB_A_PASSWORD=password_a
 
-5. **Create database tables**
-```bash
-python scripts/create_tables.py
-```
+   # Database B Configuration
+   DB_B_HOST=localhost
+   DB_B_PORT=5432
+   DB_B_NAME=database_b
+   DB_B_USER=username_b
+   DB_B_PASSWORD=password_b
 
-## Konfigurasi Database
+   # Logging Configuration
+   LOG_LEVEL=INFO
+   LOG_FILE=./logs/database_operations.log
 
-Edit file `.env` dengan konfigurasi database Anda:
-
-```env
-# Database A (Main Database)
-DB_A_HOST=localhost
-DB_A_PORT=5432
-DB_A_NAME=main_database
-DB_A_USER=your_username
-DB_A_PASSWORD=your_password
-
-# Database B (Warehouse Cleaning Database)
-DB_B_HOST=localhost
-DB_B_PORT=5432
-DB_B_NAME=warehouse_cleaning
-DB_B_USER=your_username
-DB_B_PASSWORD=your_password
-```
+   # Application Configuration
+   BATCH_SIZE=1000
+   MAX_RETRIES=3
+   RETRY_DELAY=5
+   ```
 
 ## Penggunaan
 
-### 1. Menjalankan API Server
+### Menggunakan Shell Script (Recommended)
 
 ```bash
-# Menggunakan script (otomatis detect Python 3.11.5, 3.9, atau 3.8)
-./start.sh
+# Setup environment dan buat tabel
+./run_database_operations.sh --setup-only
 
-# Atau manual
-python run.py
+# Copy product data saja
+./run_database_operations.sh --copy-products
+
+# Copy order data dengan range tanggal
+./run_database_operations.sh --copy-orders 2024-01-01 2024-01-31
+
+# Copy semua data (product + order dengan range tanggal)
+./run_database_operations.sh --copy-all 2024-01-01 2024-01-31
+
+# Lihat help
+./run_database_operations.sh --help
 ```
 
-Server akan berjalan di `http://localhost:8000`
-
-### 2. Menggunakan CLI Interface
+### Menggunakan Python Script Langsung
 
 ```bash
-# Mode interaktif
-./cli_tool.sh interactive-mode
+# Buat tabel
+python3 create_tables.py
 
-# Compare data by date range
-./cli_tool.sh compare-data --start-date 2025-01-01 --end-date 2025-01-31
+# Copy product data
+python3 copy_product_data.py --validate
 
-# Create payload for specific do_number
-./cli_tool.sh create-payload B01SI2507-1602
+# Copy product data dengan force update
+python3 copy_product_data.py --force-update --validate
 
-# List payload results
-./cli_tool.sh list-payloads --limit 10
-
-# Get specific payload
-./cli_tool.sh get-payload B01SI2507-1602
+# Copy order data
+python3 copy_order_data.py --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
-### 3. API Endpoints
+## Logging
 
-#### Compare Data
-```bash
-POST /compare-data
-Content-Type: application/json
+Semua operasi akan di-log ke:
+- Console output (real-time)
+- File log: `./logs/database_operations.log`
 
-{
-  "start_date": "2025-01-01",
-  "end_date": "2025-01-31"
-}
-```
+Level log dapat diatur di `config.env`:
+- DEBUG: Detail lengkap
+- INFO: Informasi umum (default)
+- WARNING: Peringatan
+- ERROR: Error saja
 
-#### Create Payload
-```bash
-POST /create-payload/{do_number}
-```
+## Konfigurasi
 
-#### Get Payload Results
-```bash
-GET /payload-results?limit=100&offset=0
-```
+### Environment Variables
 
-#### Get Specific Payload
-```bash
-GET /payload-result/{do_number}
-```
+| Variable | Description | Default |
+|----------|-------------|---------|
+| BATCH_SIZE | Jumlah record per batch | 1000 |
+| MAX_RETRIES | Maksimal retry jika gagal | 3 |
+| RETRY_DELAY | Delay antar retry (detik) | 5 |
+| LOG_LEVEL | Level logging | INFO |
 
-## Alur Kerja
+### Database Connection
 
-1. **Perbandingan Data**:
-   - Input rentang tanggal (start_date, end_date)
-   - Query data dari Database A berdasarkan `faktur_date`
-   - Query data dari Database B berdasarkan `faktur_date`
-   - Bandingkan jumlah item per `do_number`
-   - Tampilkan discrepancy yang ditemukan
+Pastikan database A memiliki tabel:
+- `order`
+- `order_detail` 
+- `mst_product`
 
-2. **Pembuatan Payload**:
-   - Pilih `do_number` yang memiliki discrepancy
-   - Ambil data lengkap dari Database B
-   - Buat payload JSON sesuai format yang diperlukan
-   - Simpan hasil ke table `cleaning_payload_results`
-
-3. **Format Payload**:
-```json
-{
-  "warehouse_id": "KJR01",
-  "client_id": "BBM",
-  "outbound_reference": "B01SI2507-1602",
-  "divisi": "SOFT HEAVEN",
-  "faktur_date": "2025-07-17",
-  "request_delivery_date": "2025-07-24",
-  "origin_name": "BBM-SURABAYA",
-  "origin_address_1": "SURABAYA",
-  "origin_address_2": "",
-  "origin_city": "SURABAYA",
-  "origin_phone": "",
-  "origin_email": "",
-  "destination_id": "CL34551",
-  "destination_name": "SONIA MM",
-  "destination_address_1": "DEMAK JAYA IV/8, KEC. BUBUTAN",
-  "destination_address_2": "DEMAK JAYA IV/8, KEC. BUBUTAN",
-  "destination_city": "SURABAYA",
-  "destination_zip_code": "",
-  "destination_phone": "",
-  "destination_email": "",
-  "order_type": "REG",
-  "items": [
-    {
-      "warehouse_id": "KJR01",
-      "line_id": "1",
-      "product_id": "61396901100001",
-      "product_description": "SOFT HEAVEN KAPAS 96PCX50GR",
-      "group_id": "10",
-      "group_description": "FACIAL TREATMENT",
-      "product_type": "61",
-      "qty": 3,
-      "uom": "CTN",
-      "pack_id": "0102",
-      "product_net_price": 2066400,
-      "conversion": [
-        {
-          "uom": "PCS",
-          "numerator": 1,
-          "denominator": 1
-        },
-        {
-          "uom": "CTN",
-          "numerator": 96,
-          "denominator": 1
-        }
-      ],
-      "image_url": [""]
-    }
-  ]
-}
-```
-
-## Struktur Proyek
-
-```
-ordercleaning/
-├── api/
-│   └── main.py                 # FastAPI application
-├── cli/
-│   └── main.py                 # CLI interface
-├── config/
-│   └── database.py             # Database configuration
-├── models/
-│   ├── database_a_models.py    # Database A models
-│   └── database_b_models.py    # Database B models
-├── schemas/
-│   └── payload_schemas.py      # Pydantic schemas
-├── services/
-│   └── data_comparison_service.py  # Business logic
-├── scripts/
-│   └── create_tables.py        # Table creation script
-├── requirements.txt            # Python dependencies
-├── env_example.txt            # Environment variables example
-└── README.md                  # Documentation
-```
+Dan database B akan dibuat tabel:
+- `order_main`
+- `order_detail_main`
+- `mst_product_main`
 
 ## Troubleshooting
 
-### Error Database Connection
-- Pastikan konfigurasi database di `.env` sudah benar
+### Error: Connection Failed
+- Periksa konfigurasi database di `config.env`
 - Pastikan database server berjalan
-- Pastikan user database memiliki permission yang cukup
+- Periksa firewall dan network connectivity
 
-### Error Table Not Found
-- Jalankan script `python scripts/create_tables.py`
-- Pastikan nama table sesuai dengan yang ada di database
+### Error: Table Already Exists
+- Script menggunakan `CREATE TABLE IF NOT EXISTS`, jadi aman untuk dijalankan berulang
+- Jika ingin recreate tabel, drop manual dulu
 
-### Error Import Module
-- Pastikan semua dependencies sudah terinstall: `pip install -r requirements.txt`
-- Pastikan Python path sudah benar
+### Error: Permission Denied
+- Pastikan user database memiliki permission untuk:
+  - SELECT pada database A
+  - CREATE, INSERT, UPDATE pada database B
 
-## Kontribusi
+### Error: Data Type Mismatch
+- Periksa struktur tabel source dan target
+- Pastikan data type compatible
 
-1. Fork repository
-2. Buat feature branch
-3. Commit perubahan
-4. Push ke branch
-5. Buat Pull Request
+### Performance Issues
+- Kurangi `BATCH_SIZE` jika memory terbatas
+- Tingkatkan `BATCH_SIZE` jika network cepat
+- Monitor log untuk progress
 
-## Lisensi
+## Monitoring
 
-MIT License 
+### Progress Tracking
+Script akan menampilkan progress real-time:
+```
+[2024-01-15 10:30:15] Found 5000 order records to copy
+[2024-01-15 10:30:16] Copied 1000 order records (Total: 1000/5000)
+[2024-01-15 10:30:17] Copied 1000 order records (Total: 2000/5000)
+```
+
+### Validation
+Gunakan flag `--validate` untuk memverifikasi data:
+```
+[2024-01-15 10:35:20] Source database product count: 1500
+[2024-01-15 10:35:21] Target database product count: 1500
+[2024-01-15 10:35:21] Product data validation successful - counts match
+```
+
+## Backup dan Recovery
+
+### Sebelum Menjalankan Script
+```sql
+-- Backup database B
+pg_dump database_b > backup_before_copy.sql
+```
+
+### Jika Gagal
+```sql
+-- Restore database B
+psql database_b < backup_before_copy.sql
+```
+
+## Support
+
+Jika ada masalah atau pertanyaan:
+1. Periksa log file untuk detail error
+2. Pastikan semua prerequisites terpenuhi
+3. Test koneksi database manual
+4. Periksa permission database user 
