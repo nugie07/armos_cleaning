@@ -186,17 +186,16 @@ def copy_order_detail_data_composite(source_conn, target_conn, start_date, end_d
         copied_count = 0
         
         while offset < total_records:
-            # Fetch batch from source
+            # Fetch batch from source with order information
             select_query = """
             SELECT 
                 od.quantity_faktur, od.net_price, od.quantity_wms, od.quantity_delivery,
                 od.quantity_loading, od.quantity_unloading, od.status, od.cancel_reason,
-                od.notes, om.order_id, od.product_id, od.unit_id, od.pack_id, od.line_id,
+                od.notes, od.product_id, od.unit_id, od.pack_id, od.line_id,
                 od.unloading_latitude, od.unloading_longitude, od.origin_uom, od.origin_qty,
-                od.total_ctn, od.total_pcs
+                od.total_ctn, od.total_pcs, o.faktur_id, o.faktur_date, o.customer_id
             FROM order_detail od
             JOIN "order" o ON od.order_id = o.order_id
-            JOIN order_main om ON (o.faktur_id = om.faktur_id AND o.faktur_date = om.faktur_date AND o.customer_id = om.customer_id)
             WHERE o.faktur_date >= %s AND o.faktur_date <= %s
             ORDER BY o.faktur_date
             LIMIT %s OFFSET %s
@@ -209,14 +208,42 @@ def copy_order_detail_data_composite(source_conn, target_conn, start_date, end_d
             if not batch_data:
                 break
             
+            # Process each record to get order_id from target database
+            processed_records = []
+            for record in batch_data:
+                # Extract order details for lookup
+                faktur_id, faktur_date, customer_id = record[-3], record[-2], record[-1]
+                
+                # Get order_id from target database
+                lookup_query = """
+                SELECT order_id FROM order_main 
+                WHERE faktur_id = %s AND faktur_date = %s AND customer_id = %s
+                """
+                
+                with target_conn.cursor() as cursor:
+                    cursor.execute(lookup_query, (faktur_id, faktur_date, customer_id))
+                    result = cursor.fetchone()
+                    
+                    if result:
+                        order_id = result[0]
+                        # Remove the last 3 fields (faktur_id, faktur_date, customer_id) and add order_id
+                        processed_record = record[:-3] + (order_id,)
+                        processed_records.append(processed_record)
+                    else:
+                        logger.warning(f"Order not found for faktur_id: {faktur_id}, date: {faktur_date}, customer: {customer_id}")
+            
+            if not processed_records:
+                offset += batch_size
+                continue
+            
             # Insert batch into target
             insert_query = """
             INSERT INTO order_detail_main (
                 quantity_faktur, net_price, quantity_wms, quantity_delivery,
                 quantity_loading, quantity_unloading, status, cancel_reason,
-                notes, order_id, product_id, unit_id, pack_id, line_id,
+                notes, product_id, unit_id, pack_id, line_id,
                 unloading_latitude, unloading_longitude, origin_uom, origin_qty,
-                total_ctn, total_pcs
+                total_ctn, total_pcs, order_id
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                      %s, %s, %s, %s)
             ON CONFLICT (order_id, product_id, line_id) DO NOTHING
@@ -226,10 +253,10 @@ def copy_order_detail_data_composite(source_conn, target_conn, start_date, end_d
             while retry_count < max_retries:
                 try:
                     with target_conn.cursor() as cursor:
-                        cursor.executemany(insert_query, batch_data)
+                        cursor.executemany(insert_query, processed_records)
                         target_conn.commit()
                     
-                    batch_copied = len(batch_data)
+                    batch_copied = len(processed_records)
                     copied_count += batch_copied
                     offset += batch_size
                     
