@@ -219,6 +219,7 @@ def copy_order_detail_data(source_conn, target_conn, start_date, end_date, logge
                 total_ctn, total_pcs
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                      %s, %s, %s, %s)
+            ON CONFLICT (order_id, product_id, line_id) DO NOTHING
             """
             
             retry_count = 0

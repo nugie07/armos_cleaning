@@ -128,7 +128,8 @@ def create_order_detail_main_table(conn):
         origin_uom VARCHAR(50),
         origin_qty DECIMAL(10,2),
         total_ctn INTEGER,
-        total_pcs INTEGER
+        total_pcs INTEGER,
+        UNIQUE(order_id, product_id, line_id)
     );
     """
     
