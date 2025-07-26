@@ -125,8 +125,14 @@ Script untuk operasi database yang mencakup pembuatan tabel, copy data order, da
 # Copy product data (Initial Copy - skip existing)
 ./run_database_operations.sh --copy-products
 
+# Copy product data dengan batch custom (10k records, delay 30s)
+./run_database_operations.sh --copy-products-batch 10000 30
+
 # Copy product data dengan UPSERT (update existing)
 ./run_database_operations.sh --copy-products-upsert
+
+# Copy product data dengan UPSERT dan batch custom
+./run_database_operations.sh --copy-products-upsert-batch 10000 30
 
 # Copy order data dengan range tanggal dan warehouse filter
 ./run_database_operations.sh --copy-orders 2024-01-01 2024-01-31 WAREHOUSE_001
@@ -147,8 +153,14 @@ python3 create_tables.py
 # Copy product data (Initial Copy - skip existing)
 python3 copy_product_data.py --validate
 
+# Copy product data dengan batch custom (10k records, delay 30s)
+python3 copy_product_data.py --validate --batch-size 10000 --batch-delay 30
+
 # Copy product data dengan UPSERT (update existing)
 python3 copy_product_data_upsert.py --validate
+
+# Copy product data dengan UPSERT dan batch custom
+python3 copy_product_data_upsert.py --validate --batch-size 10000 --batch-delay 30
 
 # Copy order data dengan warehouse filter
 python3 copy_order_data.py --start-date 2024-01-01 --end-date 2024-01-31 --warehouse-id WAREHOUSE_001

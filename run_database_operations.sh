@@ -80,8 +80,12 @@ create_tables() {
 
 # Copy product data (initial copy)
 copy_products() {
+    local batch_size=${1:-10000}
+    local batch_delay=${2:-30}
+    
     log "Copying product data from Database A to Database B (Initial Copy)..."
-    if python3 copy_product_data.py --validate; then
+    log "Batch size: ${batch_size}, Batch delay: ${batch_delay}s"
+    if python3 copy_product_data.py --validate --batch-size "$batch_size" --batch-delay "$batch_delay"; then
         success "Product data copied successfully"
     else
         error "Failed to copy product data"
@@ -91,8 +95,12 @@ copy_products() {
 
 # Copy product data with UPSERT
 copy_products_upsert() {
+    local batch_size=${1:-10000}
+    local batch_delay=${2:-30}
+    
     log "Copying product data from Database A to Database B (UPSERT)..."
-    if python3 copy_product_data_upsert.py --validate; then
+    log "Batch size: ${batch_size}, Batch delay: ${batch_delay}s"
+    if python3 copy_product_data_upsert.py --validate --batch-size "$batch_size" --batch-delay "$batch_delay"; then
         success "Product data UPSERT completed successfully"
     else
         error "Failed to copy product data"
@@ -128,7 +136,9 @@ show_usage() {
     echo "Options:"
     echo "  --setup-only              Only setup environment and create tables"
     echo "  --copy-products           Copy product data only (Initial Copy)"
+    echo "  --copy-products-batch BATCH_SIZE DELAY  Copy product data with custom batch size and delay"
     echo "  --copy-products-upsert    Copy product data with UPSERT (Update existing)"
+    echo "  --copy-products-upsert-batch BATCH_SIZE DELAY  Copy product data with UPSERT and custom batch"
     echo "  --copy-orders START END WAREHOUSE_ID   Copy order data with date range and warehouse filter"
     echo "  --copy-all START END WAREHOUSE_ID      Copy all data (products + orders with date range and warehouse filter)"
     echo "  --help                    Show this help message"
@@ -136,7 +146,9 @@ show_usage() {
     echo "Examples:"
     echo "  $0 --setup-only"
     echo "  $0 --copy-products"
+    echo "  $0 --copy-products-batch 10000 30"
     echo "  $0 --copy-products-upsert"
+    echo "  $0 --copy-products-upsert-batch 10000 30"
     echo "  $0 --copy-orders 2024-01-01 2024-01-31 WAREHOUSE_001"
     echo "  $0 --copy-all 2024-01-01 2024-01-31 WAREHOUSE_001"
 }
@@ -164,9 +176,29 @@ main() {
             copy_products
             success "Product copy completed successfully"
             ;;
+        --copy-products-batch)
+            if [ -z "$2" ] || [ -z "$3" ]; then
+                error "Batch size and delay are required for batch copy"
+                show_usage
+                exit 1
+            fi
+            create_tables
+            copy_products "$2" "$3"
+            success "Product copy completed successfully"
+            ;;
         --copy-products-upsert)
             create_tables
             copy_products_upsert
+            success "Product UPSERT completed successfully"
+            ;;
+        --copy-products-upsert-batch)
+            if [ -z "$2" ] || [ -z "$3" ]; then
+                error "Batch size and delay are required for batch UPSERT"
+                show_usage
+                exit 1
+            fi
+            create_tables
+            copy_products_upsert "$2" "$3"
             success "Product UPSERT completed successfully"
             ;;
         --copy-orders)

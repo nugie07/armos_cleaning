@@ -60,9 +60,9 @@ def get_db_connection(database_type):
         logging.error(f"Failed to connect to database {database_type}: {str(e)}")
         raise
 
-def copy_product_data(source_conn, target_conn, logger):
+def copy_product_data(source_conn, target_conn, logger, batch_delay=30):
     """Copy mst_product data from source to target database (DO NOTHING on conflict)"""
-    batch_size = int(os.getenv('BATCH_SIZE', 1000))
+    batch_size = int(os.getenv('BATCH_SIZE', 10000))  # Default 10k per batch
     max_retries = int(os.getenv('MAX_RETRIES', 3))
     
     # Get total count for progress tracking
@@ -122,6 +122,13 @@ def copy_product_data(source_conn, target_conn, logger):
                     offset += batch_size
                     
                     logger.info(f"Processed {batch_copied} product records (Total: {copied_count}/{total_records})")
+                    
+                    # Add delay between batches if not the last batch
+                    if offset < total_records and batch_delay > 0:
+                        logger.info(f"Waiting {batch_delay} seconds before next batch...")
+                        import time
+                        time.sleep(batch_delay)
+                    
                     break
                     
                 except Exception as e:
@@ -177,6 +184,10 @@ def main():
     parser = argparse.ArgumentParser(description='Copy product data from Database A to Database B (Initial Copy)')
     parser.add_argument('--validate', action='store_true',
                        help='Validate data after copy')
+    parser.add_argument('--batch-delay', type=int, default=30,
+                       help='Delay in seconds between batches (default: 30)')
+    parser.add_argument('--batch-size', type=int, default=10000,
+                       help='Number of records per batch (default: 10000)')
     
     args = parser.parse_args()
     
@@ -196,7 +207,8 @@ def main():
         
         # Copy product data
         logger.info("Starting product data copy...")
-        copied_count = copy_product_data(source_conn, target_conn, logger)
+        logger.info(f"Batch size: {args.batch_size}, Batch delay: {args.batch_delay} seconds")
+        copied_count = copy_product_data(source_conn, target_conn, logger, args.batch_delay)
         
         # Validate if requested
         if args.validate:
