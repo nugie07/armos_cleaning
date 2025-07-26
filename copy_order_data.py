@@ -232,22 +232,19 @@ def copy_order_detail_data_composite(source_conn, target_conn, start_date, end_d
                 # Extract order details for lookup
                 faktur_id, faktur_date, customer_id = record[-3], record[-2], record[-1]
                 
-                # Get order_id from target database - handle NULL customer_id
+                # Skip order details with NULL customer_id
                 if customer_id is None:
-                    lookup_query = """
-                    SELECT order_id FROM order_main 
-                    WHERE faktur_id = %s AND faktur_date = %s AND customer_id IS NULL
-                    """
-                    lookup_params = (faktur_id, faktur_date)
-                else:
-                    lookup_query = """
-                    SELECT order_id FROM order_main 
-                    WHERE faktur_id = %s AND faktur_date = %s AND customer_id = %s
-                    """
-                    lookup_params = (faktur_id, faktur_date, customer_id)
+                    logger.info(f"Skipping order detail for faktur_id: {faktur_id}, date: {faktur_date} (customer_id is NULL)")
+                    continue
+                
+                # Get order_id from target database
+                lookup_query = """
+                SELECT order_id FROM order_main 
+                WHERE faktur_id = %s AND faktur_date = %s AND customer_id = %s
+                """
                 
                 with target_conn.cursor() as cursor:
-                    cursor.execute(lookup_query, lookup_params)
+                    cursor.execute(lookup_query, (faktur_id, faktur_date, customer_id))
                     result = cursor.fetchone()
                     
                     if result:
