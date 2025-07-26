@@ -78,11 +78,22 @@ create_tables() {
     fi
 }
 
-# Copy product data
+# Copy product data (initial copy)
 copy_products() {
-    log "Copying product data from Database A to Database B..."
+    log "Copying product data from Database A to Database B (Initial Copy)..."
     if python3 copy_product_data.py --validate; then
         success "Product data copied successfully"
+    else
+        error "Failed to copy product data"
+        exit 1
+    fi
+}
+
+# Copy product data with UPSERT
+copy_products_upsert() {
+    log "Copying product data from Database A to Database B (UPSERT)..."
+    if python3 copy_product_data_upsert.py --validate; then
+        success "Product data UPSERT completed successfully"
     else
         error "Failed to copy product data"
         exit 1
@@ -115,7 +126,8 @@ show_usage() {
     echo ""
     echo "Options:"
     echo "  --setup-only              Only setup environment and create tables"
-    echo "  --copy-products           Copy product data only"
+    echo "  --copy-products           Copy product data only (Initial Copy)"
+    echo "  --copy-products-upsert    Copy product data with UPSERT (Update existing)"
     echo "  --copy-orders START END   Copy order data with date range (YYYY-MM-DD YYYY-MM-DD)"
     echo "  --copy-all START END      Copy all data (products + orders with date range)"
     echo "  --help                    Show this help message"
@@ -123,6 +135,7 @@ show_usage() {
     echo "Examples:"
     echo "  $0 --setup-only"
     echo "  $0 --copy-products"
+    echo "  $0 --copy-products-upsert"
     echo "  $0 --copy-orders 2024-01-01 2024-01-31"
     echo "  $0 --copy-all 2024-01-01 2024-01-31"
 }
@@ -149,6 +162,11 @@ main() {
             create_tables
             copy_products
             success "Product copy completed successfully"
+            ;;
+        --copy-products-upsert)
+            create_tables
+            copy_products_upsert
+            success "Product UPSERT completed successfully"
             ;;
         --copy-orders)
             if [ -z "$2" ] || [ -z "$3" ]; then

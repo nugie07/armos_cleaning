@@ -11,6 +11,27 @@ Script untuk operasi database yang mencakup pembuatan tabel, copy data order, da
 5. **Comprehensive Logging** - Log detail untuk setiap proses
 6. **Error Handling** - Retry mechanism dan error recovery
 7. **Batch Processing** - Processing data dalam batch untuk performa optimal
+8. **UPSERT Mechanism** - Handle perubahan data dengan update existing records
+
+## Konsep UPSERT
+
+### Initial Copy vs UPSERT
+
+**Initial Copy (DO NOTHING):**
+- Script: `copy_product_data.py`, `copy_order_data.py`
+- Behavior: Skip data yang sudah ada (tidak duplikasi)
+- Use case: Copy data pertama kali
+
+**UPSERT (DO UPDATE):**
+- Script: `copy_product_data_upsert.py`, `copy_order_data_upsert.py`
+- Behavior: Update data yang sudah ada jika ada perubahan
+- Use case: Sync perubahan data dari source ke target
+
+### Strategi Penggunaan
+
+1. **Pertama kali:** Gunakan Initial Copy untuk load semua data
+2. **Selanjutnya:** Gunakan UPSERT untuk sync perubahan
+3. **Rutin:** Jalankan UPSERT secara berkala untuk update data
 
 ## Struktur Tabel
 
@@ -90,8 +111,11 @@ Script untuk operasi database yang mencakup pembuatan tabel, copy data order, da
 # Setup environment dan buat tabel
 ./run_database_operations.sh --setup-only
 
-# Copy product data saja
+# Copy product data (Initial Copy - skip existing)
 ./run_database_operations.sh --copy-products
+
+# Copy product data dengan UPSERT (update existing)
+./run_database_operations.sh --copy-products-upsert
 
 # Copy order data dengan range tanggal
 ./run_database_operations.sh --copy-orders 2024-01-01 2024-01-31
@@ -109,14 +133,17 @@ Script untuk operasi database yang mencakup pembuatan tabel, copy data order, da
 # Buat tabel
 python3 create_tables.py
 
-# Copy product data
+# Copy product data (Initial Copy - skip existing)
 python3 copy_product_data.py --validate
 
-# Copy product data dengan force update
-python3 copy_product_data.py --force-update --validate
+# Copy product data dengan UPSERT (update existing)
+python3 copy_product_data_upsert.py --validate
 
 # Copy order data
 python3 copy_order_data.py --start-date 2024-01-01 --end-date 2024-01-31
+
+# Copy order data dengan UPSERT
+python3 copy_order_data_upsert.py --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
 ## Logging

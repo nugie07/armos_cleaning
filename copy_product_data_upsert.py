@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Script to copy mst_product data from Database A to Database B
-Initial copy script - skips existing products (DO NOTHING)
+UPSERT script - updates existing products when changes detected
 """
 
 import os
@@ -60,8 +60,8 @@ def get_db_connection(database_type):
         logging.error(f"Failed to connect to database {database_type}: {str(e)}")
         raise
 
-def copy_product_data(source_conn, target_conn, logger):
-    """Copy mst_product data from source to target database (DO NOTHING on conflict)"""
+def copy_product_data_upsert(source_conn, target_conn, logger):
+    """Copy mst_product data from source to target database (UPSERT - DO UPDATE on conflict)"""
     batch_size = int(os.getenv('BATCH_SIZE', 1000))
     max_retries = int(os.getenv('MAX_RETRIES', 3))
     
@@ -73,7 +73,7 @@ def copy_product_data(source_conn, target_conn, logger):
             cursor.execute(count_query)
             total_records = cursor.fetchone()[0]
         
-        logger.info(f"Found {total_records} product records to copy")
+        logger.info(f"Found {total_records} product records to copy/update")
         
         if total_records == 0:
             logger.warning("No product records found in source database")
@@ -81,7 +81,9 @@ def copy_product_data(source_conn, target_conn, logger):
         
         # Copy data in batches
         offset = 0
-        copied_count = 0
+        processed_count = 0
+        inserted_count = 0
+        updated_count = 0
         
         while offset < total_records:
             # Fetch batch from source
@@ -101,27 +103,40 @@ def copy_product_data(source_conn, target_conn, logger):
             if not batch_data:
                 break
             
-            # Insert batch into target (DO NOTHING on conflict)
-            insert_query = """
+            # Insert or update batch into target (UPSERT)
+            upsert_query = """
             INSERT INTO mst_product_main (
                 sku, height, width, length, name, price, type_product_id, qty,
                 volume, weight, base_uom, pack_id, warehouse_id, synced_at
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (sku) DO NOTHING
+            ON CONFLICT (sku) DO UPDATE SET
+                height = EXCLUDED.height,
+                width = EXCLUDED.width,
+                length = EXCLUDED.length,
+                name = EXCLUDED.name,
+                price = EXCLUDED.price,
+                type_product_id = EXCLUDED.type_product_id,
+                qty = EXCLUDED.qty,
+                volume = EXCLUDED.volume,
+                weight = EXCLUDED.weight,
+                base_uom = EXCLUDED.base_uom,
+                pack_id = EXCLUDED.pack_id,
+                warehouse_id = EXCLUDED.warehouse_id,
+                synced_at = CURRENT_TIMESTAMP
             """
             
             retry_count = 0
             while retry_count < max_retries:
                 try:
                     with target_conn.cursor() as cursor:
-                        cursor.executemany(insert_query, batch_data)
+                        cursor.executemany(upsert_query, batch_data)
                         target_conn.commit()
                     
-                    batch_copied = len(batch_data)
-                    copied_count += batch_copied
+                    batch_processed = len(batch_data)
+                    processed_count += batch_processed
                     offset += batch_size
                     
-                    logger.info(f"Processed {batch_copied} product records (Total: {copied_count}/{total_records})")
+                    logger.info(f"Processed {batch_processed} product records (Total: {processed_count}/{total_records})")
                     break
                     
                 except Exception as e:
@@ -138,9 +153,9 @@ def copy_product_data(source_conn, target_conn, logger):
             cursor.execute("SELECT COUNT(*) FROM mst_product_main")
             final_count = cursor.fetchone()[0]
         
-        logger.info(f"Product data copy completed. Total processed: {copied_count}")
+        logger.info(f"Product data UPSERT completed. Total processed: {processed_count}")
         logger.info(f"Total products in target database: {final_count}")
-        return copied_count
+        return processed_count
         
     except Exception as e:
         logger.error(f"Error copying product data: {str(e)}")
@@ -174,7 +189,7 @@ def validate_product_data(source_conn, target_conn, logger):
 
 def main():
     """Main function"""
-    parser = argparse.ArgumentParser(description='Copy product data from Database A to Database B (Initial Copy)')
+    parser = argparse.ArgumentParser(description='Copy product data from Database A to Database B (UPSERT)')
     parser.add_argument('--validate', action='store_true',
                        help='Validate data after copy')
     
@@ -182,7 +197,7 @@ def main():
     
     logger = setup_logging()
     
-    logger.info("Starting product data copy process (Initial Copy - DO NOTHING on conflict)")
+    logger.info("Starting product data UPSERT process (DO UPDATE on conflict)")
     
     source_conn = None
     target_conn = None
@@ -195,8 +210,8 @@ def main():
         logger.info("Connected to both databases successfully")
         
         # Copy product data
-        logger.info("Starting product data copy...")
-        copied_count = copy_product_data(source_conn, target_conn, logger)
+        logger.info("Starting product data UPSERT...")
+        processed_count = copy_product_data_upsert(source_conn, target_conn, logger)
         
         # Validate if requested
         if args.validate:
@@ -205,11 +220,11 @@ def main():
             if not validation_success:
                 logger.warning("Data validation failed - please check the logs")
         
-        logger.info(f"Product data copy completed successfully!")
-        logger.info(f"Products processed: {copied_count}")
+        logger.info(f"Product data UPSERT completed successfully!")
+        logger.info(f"Products processed: {processed_count}")
         
     except Exception as e:
-        logger.error(f"Product data copy failed: {str(e)}")
+        logger.error(f"Product data UPSERT failed: {str(e)}")
         sys.exit(1)
     finally:
         if source_conn:
