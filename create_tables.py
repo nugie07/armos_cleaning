@@ -169,7 +169,7 @@ def create_mst_product_main_table(conn):
     create_table_sql = """
     CREATE TABLE IF NOT EXISTS mst_product_main (
         mst_product_id INTEGER PRIMARY KEY,
-        sku VARCHAR(255) UNIQUE,
+        sku VARCHAR(255),
         height DECIMAL(15,2),
         width DECIMAL(15,2),
         length DECIMAL(15,2),
