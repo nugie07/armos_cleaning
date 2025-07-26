@@ -82,8 +82,8 @@ def create_order_clean_payload_table(conn):
         logging.error(f"Failed to create order_clean_payload table: {str(e)}")
         raise
 
-def get_outbound_data(source_conn, warehouse_id, start_date, end_date, logger):
-    """Get outbound data from all three tables"""
+def get_outbound_data(db_conn, warehouse_id, start_date, end_date, logger):
+    """Get outbound data from all three tables in Database B"""
     try:
         # Try to convert warehouse_id to integer if possible
         try:
@@ -109,7 +109,7 @@ def get_outbound_data(source_conn, warehouse_id, start_date, end_date, logger):
         ORDER BY create_date
         """
         
-        with source_conn.cursor() as cursor:
+        with db_conn.cursor() as cursor:
             cursor.execute(docs_query, (warehouse_param, start_date, end_date))
             documents = cursor.fetchall()
         
@@ -129,7 +129,7 @@ def get_outbound_data(source_conn, warehouse_id, start_date, end_date, logger):
         ORDER BY oi.outbound_document_id, oi.line_id
         """
         
-        with source_conn.cursor() as cursor:
+        with db_conn.cursor() as cursor:
             cursor.execute(items_query, (warehouse_param, start_date, end_date))
             items = cursor.fetchall()
         
@@ -148,7 +148,7 @@ def get_outbound_data(source_conn, warehouse_id, start_date, end_date, logger):
         ORDER BY oc.outbound_item_id
         """
         
-        with source_conn.cursor() as cursor:
+        with db_conn.cursor() as cursor:
             cursor.execute(conv_query, (warehouse_param, start_date, end_date))
             conversions = cursor.fetchall()
         
@@ -260,8 +260,8 @@ def build_json_payload(documents, items, conversions, logger):
         logger.error(f"Error building JSON payload: {str(e)}")
         raise
 
-def save_payloads_to_database(target_conn, payloads, logger):
-    """Save JSON payloads to order_clean_payload table"""
+def save_payloads_to_database(db_conn, payloads, logger):
+    """Save JSON payloads to order_clean_payload table in Database B"""
     try:
         insert_query = """
         INSERT INTO order_clean_payload (
@@ -276,7 +276,7 @@ def save_payloads_to_database(target_conn, payloads, logger):
         saved_count = 0
         for payload in payloads:
             try:
-                with target_conn.cursor() as cursor:
+                with db_conn.cursor() as cursor:
                     cursor.execute(insert_query, (
                         payload["warehouse_id"],
                         payload["outbound_reference"],
@@ -284,12 +284,12 @@ def save_payloads_to_database(target_conn, payloads, logger):
                         payload["faktur_date"],
                         payload["client_id"]
                     ))
-                    target_conn.commit()
+                    db_conn.commit()
                     saved_count += 1
                     
             except Exception as e:
                 logger.error(f"Error saving payload for {payload['outbound_reference']}: {str(e)}")
-                target_conn.rollback()
+                db_conn.rollback()
                 continue
         
         logger.info(f"Successfully saved {saved_count} payloads to database")
@@ -325,21 +325,19 @@ def main():
     logger.info(f"Date range: {start_date} to {end_date}")
     logger.info(f"Warehouse ID: {args.warehouse_id}")
     
-    source_conn = None
-    target_conn = None
+    db_conn = None
     
     try:
-        # Connect to databases
-        source_conn = get_db_connection('A')
-        target_conn = get_db_connection('B')
-        logger.info("Connected to both databases successfully")
+        # Connect to database B only
+        db_conn = get_db_connection('B')
+        logger.info("Connected to Database B successfully")
         
         # Create table if not exists
-        create_order_clean_payload_table(target_conn)
+        create_order_clean_payload_table(db_conn)
         
-        # Get outbound data
+        # Get outbound data from Database B
         documents, items, conversions = get_outbound_data(
-            source_conn, args.warehouse_id, start_date, end_date, logger
+            db_conn, args.warehouse_id, start_date, end_date, logger
         )
         
         if not documents:
@@ -349,8 +347,8 @@ def main():
         # Build JSON payloads
         payloads = build_json_payload(documents, items, conversions, logger)
         
-        # Save to database
-        saved_count = save_payloads_to_database(target_conn, payloads, logger)
+        # Save to database B
+        saved_count = save_payloads_to_database(db_conn, payloads, logger)
         
         logger.info(f"Order clean payload creation completed successfully!")
         logger.info(f"Total documents processed: {len(documents)}")
@@ -365,12 +363,9 @@ def main():
         return 1
         
     finally:
-        if source_conn:
-            source_conn.close()
-            logger.info("Source database connection closed")
-        if target_conn:
-            target_conn.close()
-            logger.info("Target database connection closed")
+        if db_conn:
+            db_conn.close()
+            logger.info("Database B connection closed")
 
 if __name__ == "__main__":
     exit(main()) 
