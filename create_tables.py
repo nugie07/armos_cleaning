@@ -170,21 +170,21 @@ def create_mst_product_main_table(conn):
     CREATE TABLE IF NOT EXISTS mst_product_main (
         mst_product_id SERIAL PRIMARY KEY,
         sku VARCHAR(255) UNIQUE,
-        height DECIMAL(10,2),
-        width DECIMAL(10,2),
-        length DECIMAL(10,2),
+        height DECIMAL(15,2),
+        width DECIMAL(15,2),
+        length DECIMAL(15,2),
         name VARCHAR(255),
-        price DECIMAL(15,2),
+        price DECIMAL(20,2),
         type_product_id VARCHAR(255),
-        qty DECIMAL(10,2),
-        volume DECIMAL(10,2),
-        weight DECIMAL(10,2),
+        qty DECIMAL(15,2),
+        volume DECIMAL(15,2),
+        weight DECIMAL(15,2),
         base_uom VARCHAR(50),
         pack_id VARCHAR(255),
         warehouse_id VARCHAR(255),
         synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        allocated_qty DECIMAL(10,2) DEFAULT 0,
-        available_qty DECIMAL(10,2) DEFAULT 0
+        allocated_qty DECIMAL(15,2) DEFAULT 0,
+        available_qty DECIMAL(15,2) DEFAULT 0
     );
     """
     
