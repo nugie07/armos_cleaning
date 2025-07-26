@@ -49,7 +49,7 @@ def debug_product_overflow():
                 
                 # Check for very large values
                 cursor.execute(f"""
-                    SELECT sku, {field}, LENGTH(CAST({field} AS TEXT)) as length
+                    SELECT sku, {field}, LENGTH(CAST({field} AS TEXT)) as text_length
                     FROM mst_product 
                     WHERE {field} IS NOT NULL 
                     AND LENGTH(CAST({field} AS TEXT)) > 8
@@ -60,8 +60,8 @@ def debug_product_overflow():
                 large_values = cursor.fetchall()
                 if large_values:
                     print(f"Large values in {field}:")
-                    for sku, value, length in large_values:
-                        print(f"  SKU: {sku}, {field}: {value}, Length: {length}")
+                    for sku, value, text_length in large_values:
+                        print(f"  SKU: {sku}, {field}: {value}, Text Length: {text_length}")
                 else:
                     print(f"No large values found in {field}")
                 
