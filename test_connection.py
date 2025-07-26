@@ -44,7 +44,11 @@ def test_connection(database_type):
                 
                 # Get record counts
                 for table in tables:
-                    cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                    # Handle reserved keywords like 'order'
+                    if table == 'order':
+                        cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
+                    else:
+                        cursor.execute(f"SELECT COUNT(*) FROM {table}")
                     count = cursor.fetchone()[0]
                     print(f"  - {table}: {count} records")
             
