@@ -65,6 +65,15 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
     batch_size = int(os.getenv('BATCH_SIZE', 1000))
     max_retries = int(os.getenv('MAX_RETRIES', 3))
     
+    # Try to convert warehouse_id to integer if possible
+    try:
+        warehouse_id_int = int(warehouse_id)
+        logger.info(f"Using warehouse_id as integer: {warehouse_id_int}")
+        warehouse_param = warehouse_id_int
+    except ValueError:
+        logger.info(f"Using warehouse_id as string: {warehouse_id}")
+        warehouse_param = warehouse_id
+    
     # Get total count for progress tracking
     count_query = """
     SELECT COUNT(*) FROM "order" 
@@ -73,7 +82,7 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
     
     try:
         with source_conn.cursor() as cursor:
-            cursor.execute(count_query, (start_date, end_date, warehouse_id))
+            cursor.execute(count_query, (start_date, end_date, warehouse_param))
             total_records = cursor.fetchone()[0]
         
         logger.info(f"Found {total_records} order records to copy")
@@ -105,7 +114,7 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
             """
             
             with source_conn.cursor() as cursor:
-                cursor.execute(select_query, (start_date, end_date, warehouse_id, batch_size, offset))
+                cursor.execute(select_query, (start_date, end_date, warehouse_param, batch_size, offset))
                 batch_data = cursor.fetchall()
             
             if not batch_data:
@@ -163,6 +172,15 @@ def copy_order_detail_data_composite(source_conn, target_conn, start_date, end_d
     batch_size = int(os.getenv('BATCH_SIZE', 1000))
     max_retries = int(os.getenv('MAX_RETRIES', 3))
     
+    # Try to convert warehouse_id to integer if possible
+    try:
+        warehouse_id_int = int(warehouse_id)
+        logger.info(f"Using warehouse_id as integer: {warehouse_id_int}")
+        warehouse_param = warehouse_id_int
+    except ValueError:
+        logger.info(f"Using warehouse_id as string: {warehouse_id}")
+        warehouse_param = warehouse_id
+    
     # Get total count for progress tracking - filter by warehouse_id from order table
     count_query = """
     SELECT COUNT(*) FROM order_detail od
@@ -172,7 +190,7 @@ def copy_order_detail_data_composite(source_conn, target_conn, start_date, end_d
     
     try:
         with source_conn.cursor() as cursor:
-            cursor.execute(count_query, (start_date, end_date, warehouse_id))
+            cursor.execute(count_query, (start_date, end_date, warehouse_param))
             total_records = cursor.fetchone()[0]
         
         logger.info(f"Found {total_records} order_detail records to copy")
@@ -202,7 +220,7 @@ def copy_order_detail_data_composite(source_conn, target_conn, start_date, end_d
             """
             
             with source_conn.cursor() as cursor:
-                cursor.execute(select_query, (start_date, end_date, warehouse_id, batch_size, offset))
+                cursor.execute(select_query, (start_date, end_date, warehouse_param, batch_size, offset))
                 batch_data = cursor.fetchall()
             
             if not batch_data:
