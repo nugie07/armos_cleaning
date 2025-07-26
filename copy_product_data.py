@@ -87,10 +87,10 @@ def copy_product_data(source_conn, target_conn, logger, batch_delay=30):
             # Fetch batch from source
             select_query = """
             SELECT 
-                sku, height, width, length, name, price, type_product_id, qty,
+                mst_product_id, sku, height, width, length, name, price, type_product_id, qty,
                 volume, weight, base_uom, pack_id, warehouse_id
             FROM mst_product
-            ORDER BY sku
+            ORDER BY mst_product_id
             LIMIT %s OFFSET %s
             """
             
@@ -104,10 +104,10 @@ def copy_product_data(source_conn, target_conn, logger, batch_delay=30):
             # Insert batch into target (DO NOTHING on conflict)
             insert_query = """
             INSERT INTO mst_product_main (
-                sku, height, width, length, name, price, type_product_id, qty,
+                mst_product_id, sku, height, width, length, name, price, type_product_id, qty,
                 volume, weight, base_uom, pack_id, warehouse_id, synced_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (sku) DO NOTHING
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (mst_product_id) DO NOTHING
             """
             
             retry_count = 0
