@@ -8,7 +8,8 @@ import sys
 import psycopg2
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables - try .env first, then config.env
+load_dotenv('.env')
 load_dotenv('config.env')
 
 def test_connection(database_type):
