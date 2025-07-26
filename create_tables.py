@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Script to create tables in Database B
-Creates: order_main, order_detail_main, mst_product_main
+Script to create tables with proper handling for duplicate faktur_id
+Uses composite keys instead of single field unique constraints
 """
 
 import os
@@ -51,8 +51,28 @@ def get_db_connection(database_type):
         logging.error(f"Failed to connect to database {database_type}: {str(e)}")
         raise
 
+def drop_tables(conn):
+    """Drop existing tables"""
+    drop_queries = [
+        "DROP TABLE IF EXISTS order_detail_main CASCADE",
+        "DROP TABLE IF EXISTS order_main CASCADE", 
+        "DROP TABLE IF EXISTS mst_product_main CASCADE"
+    ]
+    
+    try:
+        with conn.cursor() as cursor:
+            for query in drop_queries:
+                cursor.execute(query)
+                logging.info(f"Executed: {query}")
+            conn.commit()
+            logging.info("All tables dropped successfully")
+    except Exception as e:
+        conn.rollback()
+        logging.error(f"Failed to drop tables: {str(e)}")
+        raise
+
 def create_order_main_table(conn):
-    """Create order_main table"""
+    """Create order_main table with composite unique key"""
     create_table_sql = """
     CREATE TABLE IF NOT EXISTS order_main (
         order_id SERIAL PRIMARY KEY,
@@ -91,7 +111,7 @@ def create_order_main_table(conn):
         address_change BOOLEAN DEFAULT FALSE,
         divisi VARCHAR(100),
         pre_status VARCHAR(50),
-        UNIQUE(faktur_id)
+        UNIQUE(faktur_id, faktur_date, customer_id)
     );
     """
     
@@ -99,7 +119,7 @@ def create_order_main_table(conn):
         with conn.cursor() as cursor:
             cursor.execute(create_table_sql)
             conn.commit()
-            logging.info("Table order_main created successfully")
+            logging.info("Table order_main created successfully with composite unique key")
     except Exception as e:
         conn.rollback()
         logging.error(f"Failed to create order_main table: {str(e)}")
@@ -179,25 +199,30 @@ def create_mst_product_main_table(conn):
         raise
 
 def main():
-    """Main function to create all tables"""
+    """Main function to drop and recreate all tables"""
     logger = setup_logging()
     
-    logger.info("Starting table creation process...")
+    logger.info("Starting table recreation process with composite keys...")
     
     try:
         # Connect to database B
         conn = get_db_connection('B')
         logger.info("Connected to database B successfully")
         
-        # Create tables
+        # Drop existing tables
+        logger.info("Dropping existing tables...")
+        drop_tables(conn)
+        
+        # Create tables with composite unique keys
+        logger.info("Creating tables with composite unique keys...")
         create_order_main_table(conn)
         create_order_detail_main_table(conn)
         create_mst_product_main_table(conn)
         
-        logger.info("All tables created successfully!")
+        logger.info("All tables recreated successfully!")
         
     except Exception as e:
-        logger.error(f"Table creation failed: {str(e)}")
+        logger.error(f"Table recreation failed: {str(e)}")
         sys.exit(1)
     finally:
         if 'conn' in locals():
