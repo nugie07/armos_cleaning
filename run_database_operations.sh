@@ -100,19 +100,20 @@ copy_products_upsert() {
     fi
 }
 
-# Copy order data with date range
+# Copy order data with date range and warehouse filter
 copy_orders() {
     local start_date=$1
     local end_date=$2
+    local warehouse_id=$3
     
-    if [ -z "$start_date" ] || [ -z "$end_date" ]; then
-        warning "No date range provided for order copy. Skipping order data copy."
-        warning "To copy order data, run: ./run_database_operations.sh --copy-orders YYYY-MM-DD YYYY-MM-DD"
+    if [ -z "$start_date" ] || [ -z "$end_date" ] || [ -z "$warehouse_id" ]; then
+        warning "No date range or warehouse_id provided for order copy. Skipping order data copy."
+        warning "To copy order data, run: ./run_database_operations.sh --copy-orders YYYY-MM-DD YYYY-MM-DD WAREHOUSE_ID"
         return 0
     fi
     
-    log "Copying order data from Database A to Database B (${start_date} to ${end_date})..."
-    if python3 copy_order_data.py --start-date "$start_date" --end-date "$end_date"; then
+    log "Copying order data from Database A to Database B (${start_date} to ${end_date}, warehouse: ${warehouse_id})..."
+    if python3 copy_order_data.py --start-date "$start_date" --end-date "$end_date" --warehouse-id "$warehouse_id"; then
         success "Order data copied successfully"
     else
         error "Failed to copy order data"
@@ -128,16 +129,16 @@ show_usage() {
     echo "  --setup-only              Only setup environment and create tables"
     echo "  --copy-products           Copy product data only (Initial Copy)"
     echo "  --copy-products-upsert    Copy product data with UPSERT (Update existing)"
-    echo "  --copy-orders START END   Copy order data with date range (YYYY-MM-DD YYYY-MM-DD)"
-    echo "  --copy-all START END      Copy all data (products + orders with date range)"
+    echo "  --copy-orders START END WAREHOUSE_ID   Copy order data with date range and warehouse filter"
+    echo "  --copy-all START END WAREHOUSE_ID      Copy all data (products + orders with date range and warehouse filter)"
     echo "  --help                    Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0 --setup-only"
     echo "  $0 --copy-products"
     echo "  $0 --copy-products-upsert"
-    echo "  $0 --copy-orders 2024-01-01 2024-01-31"
-    echo "  $0 --copy-all 2024-01-01 2024-01-31"
+    echo "  $0 --copy-orders 2024-01-01 2024-01-31 WAREHOUSE_001"
+    echo "  $0 --copy-all 2024-01-01 2024-01-31 WAREHOUSE_001"
 }
 
 # Main function
@@ -169,24 +170,24 @@ main() {
             success "Product UPSERT completed successfully"
             ;;
         --copy-orders)
-            if [ -z "$2" ] || [ -z "$3" ]; then
-                error "Start date and end date are required for order copy"
+            if [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ]; then
+                error "Start date, end date, and warehouse_id are required for order copy"
                 show_usage
                 exit 1
             fi
             create_tables
-            copy_orders "$2" "$3"
+            copy_orders "$2" "$3" "$4"
             success "Order copy completed successfully"
             ;;
         --copy-all)
-            if [ -z "$2" ] || [ -z "$3" ]; then
-                error "Start date and end date are required for full copy"
+            if [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ]; then
+                error "Start date, end date, and warehouse_id are required for full copy"
                 show_usage
                 exit 1
             fi
             create_tables
             copy_products
-            copy_orders "$2" "$3"
+            copy_orders "$2" "$3" "$4"
             success "All operations completed successfully"
             ;;
         --help|-h)

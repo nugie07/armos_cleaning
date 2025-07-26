@@ -60,20 +60,20 @@ def get_db_connection(database_type):
         logging.error(f"Failed to connect to database {database_type}: {str(e)}")
         raise
 
-def copy_order_data_composite(source_conn, target_conn, start_date, end_date, logger):
-    """Copy order data using composite key (faktur_id, faktur_date, customer_id)"""
+def copy_order_data_composite(source_conn, target_conn, start_date, end_date, warehouse_id, logger):
+    """Copy order data using composite key (faktur_id, faktur_date, customer_id) with warehouse filter"""
     batch_size = int(os.getenv('BATCH_SIZE', 1000))
     max_retries = int(os.getenv('MAX_RETRIES', 3))
     
     # Get total count for progress tracking
     count_query = """
     SELECT COUNT(*) FROM "order" 
-    WHERE faktur_date >= %s AND faktur_date <= %s
+    WHERE faktur_date >= %s AND faktur_date <= %s AND warehouse_id = %s
     """
     
     try:
         with source_conn.cursor() as cursor:
-            cursor.execute(count_query, (start_date, end_date))
+            cursor.execute(count_query, (start_date, end_date, warehouse_id))
             total_records = cursor.fetchone()[0]
         
         logger.info(f"Found {total_records} order records to copy")
@@ -99,13 +99,13 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, lo
                 destination_phone, destination_email, client_id, cancel_reason,
                 rdo_integration_id, address_change, divisi, pre_status
             FROM "order" 
-            WHERE faktur_date >= %s AND faktur_date <= %s
+            WHERE faktur_date >= %s AND faktur_date <= %s AND warehouse_id = %s
             ORDER BY faktur_date
             LIMIT %s OFFSET %s
             """
             
             with source_conn.cursor() as cursor:
-                cursor.execute(select_query, (start_date, end_date, batch_size, offset))
+                cursor.execute(select_query, (start_date, end_date, warehouse_id, batch_size, offset))
                 batch_data = cursor.fetchall()
             
             if not batch_data:
@@ -158,21 +158,21 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, lo
         logger.error(f"Error copying order data: {str(e)}")
         raise
 
-def copy_order_detail_data_composite(source_conn, target_conn, start_date, end_date, logger):
-    """Copy order_detail data using composite key"""
+def copy_order_detail_data_composite(source_conn, target_conn, start_date, end_date, warehouse_id, logger):
+    """Copy order_detail data using composite key - filtered by order warehouse_id"""
     batch_size = int(os.getenv('BATCH_SIZE', 1000))
     max_retries = int(os.getenv('MAX_RETRIES', 3))
     
-    # Get total count for progress tracking
+    # Get total count for progress tracking - filter by warehouse_id from order table
     count_query = """
     SELECT COUNT(*) FROM order_detail od
     JOIN "order" o ON od.order_id = o.order_id
-    WHERE o.faktur_date >= %s AND o.faktur_date <= %s
+    WHERE o.faktur_date >= %s AND o.faktur_date <= %s AND o.warehouse_id = %s
     """
     
     try:
         with source_conn.cursor() as cursor:
-            cursor.execute(count_query, (start_date, end_date))
+            cursor.execute(count_query, (start_date, end_date, warehouse_id))
             total_records = cursor.fetchone()[0]
         
         logger.info(f"Found {total_records} order_detail records to copy")
@@ -196,13 +196,13 @@ def copy_order_detail_data_composite(source_conn, target_conn, start_date, end_d
                 od.total_ctn, od.total_pcs, o.faktur_id, o.faktur_date, o.customer_id
             FROM order_detail od
             JOIN "order" o ON od.order_id = o.order_id
-            WHERE o.faktur_date >= %s AND o.faktur_date <= %s
+            WHERE o.faktur_date >= %s AND o.faktur_date <= %s AND o.warehouse_id = %s
             ORDER BY o.faktur_date
             LIMIT %s OFFSET %s
             """
             
             with source_conn.cursor() as cursor:
-                cursor.execute(select_query, (start_date, end_date, batch_size, offset))
+                cursor.execute(select_query, (start_date, end_date, warehouse_id, batch_size, offset))
                 batch_data = cursor.fetchall()
             
             if not batch_data:
@@ -286,6 +286,8 @@ def main():
                        help='Start date (YYYY-MM-DD)')
     parser.add_argument('--end-date', required=True, type=str, 
                        help='End date (YYYY-MM-DD)')
+    parser.add_argument('--warehouse-id', required=True, type=str,
+                       help='Warehouse ID to filter orders')
     
     args = parser.parse_args()
     
@@ -303,7 +305,7 @@ def main():
     
     logger = setup_logging()
     
-    logger.info(f"Starting order data copy process from {start_date} to {end_date}")
+    logger.info(f"Starting order data copy process from {start_date} to {end_date} for warehouse_id: {args.warehouse_id}")
     
     source_conn = None
     target_conn = None
@@ -317,11 +319,11 @@ def main():
         
         # Copy order data first
         logger.info("Starting order data copy...")
-        order_count = copy_order_data_composite(source_conn, target_conn, start_date, end_date, logger)
+        order_count = copy_order_data_composite(source_conn, target_conn, start_date, end_date, args.warehouse_id, logger)
         
         # Copy order_detail data
         logger.info("Starting order_detail data copy...")
-        detail_count = copy_order_detail_data_composite(source_conn, target_conn, start_date, end_date, logger)
+        detail_count = copy_order_detail_data_composite(source_conn, target_conn, start_date, end_date, args.warehouse_id, logger)
         
         logger.info(f"Data copy completed successfully!")
         logger.info(f"Orders copied: {order_count}")

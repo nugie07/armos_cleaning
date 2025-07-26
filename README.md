@@ -33,6 +33,17 @@ Script untuk operasi database yang mencakup pembuatan tabel, copy data order, da
 2. **Selanjutnya:** Gunakan UPSERT untuk sync perubahan
 3. **Rutin:** Jalankan UPSERT secara berkala untuk update data
 
+### Warehouse Filter
+
+**Order Data:**
+- Filter berdasarkan `warehouse_id` untuk copy data order dan order_detail
+- Order detail otomatis ter-filter berdasarkan order yang sudah di-filter
+- Format: `--warehouse-id WAREHOUSE_001`
+
+**Product Data:**
+- Tidak ada filter warehouse (copy semua product)
+- Product data bersifat global untuk semua warehouse
+
 ## Struktur Tabel
 
 ### order_main
@@ -117,11 +128,11 @@ Script untuk operasi database yang mencakup pembuatan tabel, copy data order, da
 # Copy product data dengan UPSERT (update existing)
 ./run_database_operations.sh --copy-products-upsert
 
-# Copy order data dengan range tanggal
-./run_database_operations.sh --copy-orders 2024-01-01 2024-01-31
+# Copy order data dengan range tanggal dan warehouse filter
+./run_database_operations.sh --copy-orders 2024-01-01 2024-01-31 WAREHOUSE_001
 
-# Copy semua data (product + order dengan range tanggal)
-./run_database_operations.sh --copy-all 2024-01-01 2024-01-31
+# Copy semua data (product + order dengan range tanggal dan warehouse filter)
+./run_database_operations.sh --copy-all 2024-01-01 2024-01-31 WAREHOUSE_001
 
 # Lihat help
 ./run_database_operations.sh --help
@@ -139,11 +150,11 @@ python3 copy_product_data.py --validate
 # Copy product data dengan UPSERT (update existing)
 python3 copy_product_data_upsert.py --validate
 
-# Copy order data
-python3 copy_order_data.py --start-date 2024-01-01 --end-date 2024-01-31
+# Copy order data dengan warehouse filter
+python3 copy_order_data.py --start-date 2024-01-01 --end-date 2024-01-31 --warehouse-id WAREHOUSE_001
 
-# Copy order data dengan UPSERT
-python3 copy_order_data_upsert.py --start-date 2024-01-01 --end-date 2024-01-31
+# Copy order data dengan UPSERT dan warehouse filter
+python3 copy_order_data_upsert.py --start-date 2024-01-01 --end-date 2024-01-31 --warehouse-id WAREHOUSE_001
 ```
 
 ## Logging
