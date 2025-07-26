@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """
-Debug script to check order and order_detail data for warehouse_id 4512
+Debug script to check order and order_detail data for specific warehouse_id and date range
 """
 
 import os
 import psycopg2
 from dotenv import load_dotenv
 import logging
-
-# Load environment variables
-load_dotenv('.env')
-load_dotenv('config.env')
+import argparse
+import sys
 
 def setup_logging():
     """Setup logging configuration"""
@@ -19,7 +17,7 @@ def setup_logging():
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler('./logs/debug_order_4512.log')
+            logging.FileHandler('./logs/debug_order.log')
         ]
     )
     return logging.getLogger(__name__)
@@ -43,11 +41,16 @@ def get_db_connection(database_type):
         logging.error(f"Failed to connect to database {database_type}: {str(e)}")
         raise
 
-def debug_order_data():
-    """Debug order data for warehouse_id 4512"""
+# Load environment variables
+load_dotenv('.env')
+load_dotenv('config.env')
+
+def debug_order_data(warehouse_id, start_date, end_date):
+    """Debug order data for specific warehouse_id and date range"""
     logger = setup_logging()
     
-    logger.info("=== Order Data Debug for Warehouse 4512 ===")
+    logger.info(f"=== Order Data Debug for Warehouse {warehouse_id} ===")
+    logger.info(f"Date Range: {start_date} to {end_date}")
     
     try:
         # Connect to database A
@@ -67,40 +70,40 @@ def debug_order_data():
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT COUNT(*) FROM "order" 
-                WHERE faktur_date BETWEEN '2025-03-01' AND '2025-03-31'
-            """)
+                WHERE faktur_date BETWEEN %s AND %s
+            """, (start_date, end_date))
             orders_in_range = cursor.fetchone()[0]
-            logger.info(f"Orders in date range (2025-03-01 to 2025-03-31): {orders_in_range}")
+            logger.info(f"Orders in date range ({start_date} to {end_date}): {orders_in_range}")
         
-        # Count orders with warehouse_id 4512
+        # Count orders with warehouse_id
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT COUNT(*) FROM "order" 
-                WHERE warehouse_id = 4512
-            """)
-            orders_warehouse_4512 = cursor.fetchone()[0]
-            logger.info(f"Orders with warehouse_id = 4512: {orders_warehouse_4512}")
+                WHERE warehouse_id = %s
+            """, (warehouse_id,))
+            orders_warehouse = cursor.fetchone()[0]
+            logger.info(f"Orders with warehouse_id = {warehouse_id}: {orders_warehouse}")
         
-        # Count orders with date range AND warehouse_id 4512
+        # Count orders with date range AND warehouse_id
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT COUNT(*) FROM "order" 
-                WHERE faktur_date BETWEEN '2025-03-01' AND '2025-03-31'
-                AND warehouse_id = 4512
-            """)
+                WHERE faktur_date BETWEEN %s AND %s
+                AND warehouse_id = %s
+            """, (start_date, end_date, warehouse_id))
             orders_both_conditions = cursor.fetchone()[0]
-            logger.info(f"Orders with date range AND warehouse_id = 4512: {orders_both_conditions}")
+            logger.info(f"Orders with date range AND warehouse_id = {warehouse_id}: {orders_both_conditions}")
         
         # Show sample order data
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT order_id, faktur_id, faktur_date, customer_id, warehouse_id, do_number
                 FROM "order" 
-                WHERE faktur_date BETWEEN '2025-03-01' AND '2025-03-31'
-                AND warehouse_id = 4512
+                WHERE faktur_date BETWEEN %s AND %s
+                AND warehouse_id = %s
                 ORDER BY faktur_date
                 LIMIT 5
-            """)
+            """, (start_date, end_date, warehouse_id))
             sample_orders = cursor.fetchall()
             logger.info(f"\nSample order data:")
             for order in sample_orders:
@@ -115,16 +118,16 @@ def debug_order_data():
             total_order_details = cursor.fetchone()[0]
             logger.info(f"Total order_details in database: {total_order_details}")
         
-        # Count order_details for orders in date range with warehouse_id 4512
+        # Count order_details for orders in date range with warehouse_id
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT COUNT(*) FROM order_detail od
                 JOIN "order" o ON od.order_id = o.order_id
-                WHERE o.faktur_date BETWEEN '2025-03-01' AND '2025-03-31'
-                AND o.warehouse_id = 4512
-            """)
+                WHERE o.faktur_date BETWEEN %s AND %s
+                AND o.warehouse_id = %s
+            """, (start_date, end_date, warehouse_id))
             order_details_filtered = cursor.fetchone()[0]
-            logger.info(f"Order details for orders with date range AND warehouse_id = 4512: {order_details_filtered}")
+            logger.info(f"Order details for orders with date range AND warehouse_id = {warehouse_id}: {order_details_filtered}")
         
         # Show sample order_detail data
         with conn.cursor() as cursor:
@@ -132,11 +135,11 @@ def debug_order_data():
                 SELECT od.order_detail_id, od.order_id, o.do_number, o.faktur_date, o.warehouse_id
                 FROM order_detail od
                 JOIN "order" o ON od.order_id = o.order_id
-                WHERE o.faktur_date BETWEEN '2025-03-01' AND '2025-03-31'
-                AND o.warehouse_id = 4512
+                WHERE o.faktur_date BETWEEN %s AND %s
+                AND o.warehouse_id = %s
                 ORDER BY o.faktur_date
                 LIMIT 10
-            """)
+            """, (start_date, end_date, warehouse_id))
             sample_order_details = cursor.fetchall()
             logger.info(f"\nSample order_detail data:")
             for detail in sample_order_details:
@@ -163,5 +166,20 @@ def debug_order_data():
         logger.error(f"Error during debug: {str(e)}")
         raise
 
+def main():
+    """Main function with command line arguments"""
+    parser = argparse.ArgumentParser(description='Debug order and order_detail data for specific warehouse_id and date range')
+    parser.add_argument('warehouse_id', type=str, help='Warehouse ID to filter by')
+    parser.add_argument('start_date', type=str, help='Start date (YYYY-MM-DD)')
+    parser.add_argument('end_date', type=str, help='End date (YYYY-MM-DD)')
+    
+    args = parser.parse_args()
+    
+    try:
+        debug_order_data(args.warehouse_id, args.start_date, args.end_date)
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        sys.exit(1)
+
 if __name__ == "__main__":
-    debug_order_data() 
+    main() 
