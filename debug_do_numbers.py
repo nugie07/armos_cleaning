@@ -58,14 +58,9 @@ def debug_do_numbers(warehouse_id, start_date, end_date):
         conn = get_db_connection('B')
         logger.info("✓ Connected to Database B successfully")
         
-        # Try to convert warehouse_id to integer if possible
-        try:
-            warehouse_id_int = int(warehouse_id)
-            logger.info(f"Using warehouse_id as integer: {warehouse_id_int}")
-            warehouse_param = warehouse_id_int
-        except ValueError:
-            logger.info(f"Using warehouse_id as string: {warehouse_id}")
-            warehouse_param = warehouse_id
+        # Use warehouse_id as string (VARCHAR in database)
+        logger.info(f"Using warehouse_id as string: {warehouse_id}")
+        warehouse_param = warehouse_id
         
         # Check total records in order_main
         logger.info("\n--- Checking order_main table ---")

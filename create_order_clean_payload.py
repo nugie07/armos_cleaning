@@ -85,14 +85,9 @@ def create_order_clean_payload_table(conn):
 def get_do_numbers_from_order_main(db_conn, warehouse_id, start_date, end_date, logger):
     """Get DO numbers from order_main table based on date range and warehouse_id"""
     try:
-        # Try to convert warehouse_id to integer if possible
-        try:
-            warehouse_id_int = int(warehouse_id)
-            logger.info(f"Using warehouse_id as integer: {warehouse_id_int}")
-            warehouse_param = warehouse_id_int
-        except ValueError:
-            logger.info(f"Using warehouse_id as string: {warehouse_id}")
-            warehouse_param = warehouse_id
+        # Use warehouse_id as string (VARCHAR in database)
+        logger.info(f"Using warehouse_id as string: {warehouse_id}")
+        warehouse_param = warehouse_id
         
         # Get DO numbers from order_main
         logger.info("Fetching DO numbers from order_main...")
