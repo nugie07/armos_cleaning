@@ -110,7 +110,7 @@ def create_order_main_table(conn):
         rdo_integration_id VARCHAR(255),
         address_change BOOLEAN DEFAULT FALSE,
         divisi VARCHAR(100),
-        pre_status VARCHAR(50),
+        pre_status VARCHAR(50)
         -- Removed composite unique constraint to allow multiple order_id with same faktur_id
     );
     """
