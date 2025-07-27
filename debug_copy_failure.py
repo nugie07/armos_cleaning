@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-if not os.getenv('DB_HOST_A'):
+if not os.getenv('DB_A_HOST'):
     load_dotenv('config.env')
 
 def setup_logging():
@@ -30,19 +30,19 @@ def get_db_connection(database='A'):
     """Get database connection"""
     if database == 'A':
         conn = psycopg2.connect(
-            host=os.getenv('DB_HOST_A'),
-            port=os.getenv('DB_PORT_A'),
-            database=os.getenv('DB_NAME_A'),
-            user=os.getenv('DB_USER_A'),
-            password=os.getenv('DB_PASS_A')
+            host=os.getenv('DB_A_HOST'),
+            port=os.getenv('DB_A_PORT'),
+            database=os.getenv('DB_A_NAME'),
+            user=os.getenv('DB_A_USER'),
+            password=os.getenv('DB_A_PASSWORD')
         )
     else:
         conn = psycopg2.connect(
-            host=os.getenv('DB_HOST_B'),
-            port=os.getenv('DB_PORT_B'),
-            database=os.getenv('DB_NAME_B'),
-            user=os.getenv('DB_USER_B'),
-            password=os.getenv('DB_PASS_B')
+            host=os.getenv('DB_B_HOST'),
+            port=os.getenv('DB_B_PORT'),
+            database=os.getenv('DB_B_NAME'),
+            user=os.getenv('DB_B_USER'),
+            password=os.getenv('DB_B_PASSWORD')
         )
     return conn
 
