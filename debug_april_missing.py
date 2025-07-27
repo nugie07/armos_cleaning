@@ -78,7 +78,7 @@ def debug_april_missing(logger, warehouse_id):
         cursor_b.execute("""
             SELECT faktur_date, COUNT(*) as order_count
             FROM order_main 
-            WHERE warehouse_id = %s 
+            WHERE warehouse_id = %s::VARCHAR 
             AND faktur_date >= '2025-04-01' 
             AND faktur_date <= '2025-04-30'
             GROUP BY faktur_date
@@ -144,7 +144,7 @@ def debug_april_missing(logger, warehouse_id):
             SELECT om.faktur_date, COUNT(odm.order_detail_id) as detail_count
             FROM order_main om
             LEFT JOIN order_detail_main odm ON om.order_id = odm.order_id
-            WHERE om.warehouse_id = %s 
+            WHERE om.warehouse_id = %s::VARCHAR 
             AND om.faktur_date >= '2025-04-01' 
             AND om.faktur_date <= '2025-04-30'
             GROUP BY om.faktur_date
