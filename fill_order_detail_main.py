@@ -52,9 +52,9 @@ def get_orders_without_details(db_conn, warehouse_id, start_date, end_date, logg
     """Get orders from order_main that don't have order_detail_main records"""
     try:
         query = """
-        SELECT DISTINCT om.id, om.do_number, om.faktur_id, om.faktur_date, om.customer_id
+        SELECT DISTINCT om.order_id, om.do_number, om.faktur_id, om.faktur_date, om.customer_id
         FROM order_main om
-        LEFT JOIN order_detail_main odm ON om.id = odm.order_id
+        LEFT JOIN order_detail_main odm ON om.order_id = odm.order_id
         WHERE om.warehouse_id = %s 
         AND om.faktur_date >= %s 
         AND om.faktur_date <= %s

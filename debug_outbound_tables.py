@@ -98,7 +98,7 @@ def check_orders_without_details(db_conn, warehouse_id, start_date, end_date, lo
         SELECT COUNT(*) as total_orders,
                COUNT(CASE WHEN odm.order_id IS NULL THEN 1 END) as orders_without_details
         FROM order_main om
-        LEFT JOIN order_detail_main odm ON om.id = odm.order_id
+        LEFT JOIN order_detail_main odm ON om.order_id = odm.order_id
         WHERE om.warehouse_id = %s 
         AND om.faktur_date >= %s 
         AND om.faktur_date <= %s
