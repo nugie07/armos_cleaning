@@ -171,21 +171,35 @@ def find_missing_orders(db_a_conn, db_b_conn, warehouse_id_a, warehouse_id_b, st
             logger.warning("Please run create_tables.py first to create the required tables")
             return []
         
-        query = """
+        # Get all orders from Database A first
+        query_a = """
         SELECT o.order_id, o.faktur_id, o.faktur_date, o.customer_id, o.warehouse_id
         FROM "order" o
         WHERE o.faktur_date >= %s AND o.faktur_date <= %s AND o.warehouse_id = %s
-        AND NOT EXISTS (
-            SELECT 1 FROM order_main om 
-            WHERE om.order_id = o.order_id
-        )
         ORDER BY o.faktur_date, o.order_id
-        LIMIT 10
         """
         
         with db_a_conn.cursor() as cursor:
-            cursor.execute(query, (start_date, end_date, warehouse_id_a))
-            missing_orders = cursor.fetchall()
+            cursor.execute(query_a, (start_date, end_date, warehouse_id_a))
+            all_orders_a = cursor.fetchall()
+        
+        # Get all order_ids from Database B
+        query_b = """
+        SELECT order_id FROM order_main
+        WHERE faktur_date >= %s AND faktur_date <= %s AND warehouse_id = %s
+        """
+        
+        with db_b_conn.cursor() as cursor:
+            cursor.execute(query_b, (start_date, end_date, warehouse_id_b))
+            existing_order_ids = {row[0] for row in cursor.fetchall()}
+        
+        # Find missing orders
+        missing_orders = []
+        for order in all_orders_a:
+            if order[0] not in existing_order_ids:  # order_id not in Database B
+                missing_orders.append(order)
+                if len(missing_orders) >= 10:  # Limit to 10
+                    break
         
         if missing_orders:
             logger.warning(f"Found {len(missing_orders)} missing orders (showing first 10):")
@@ -223,24 +237,38 @@ def find_missing_order_details(db_a_conn, db_b_conn, warehouse_id_a, warehouse_i
             logger.warning("Please run create_tables.py first to create the required tables")
             return []
         
-        query = """
+        # Get all order details from Database A first
+        query_a = """
         SELECT od.order_detail_id, od.order_id, o.faktur_id, o.faktur_date, od.product_id, od.line_id
         FROM order_detail od
         JOIN "order" o ON od.order_id = o.order_id
         WHERE o.faktur_date >= %s AND o.faktur_date <= %s AND o.warehouse_id = %s
-        AND NOT EXISTS (
-            SELECT 1 FROM order_detail_main odm 
-            WHERE odm.order_id = od.order_id 
-            AND odm.product_id = od.product_id 
-            AND odm.line_id = od.line_id
-        )
         ORDER BY o.faktur_date, od.order_id
-        LIMIT 10
         """
         
         with db_a_conn.cursor() as cursor:
-            cursor.execute(query, (start_date, end_date, warehouse_id_a))
-            missing_details = cursor.fetchall()
+            cursor.execute(query_a, (start_date, end_date, warehouse_id_a))
+            all_details_a = cursor.fetchall()
+        
+        # Get all order detail keys from Database B
+        query_b = """
+        SELECT order_id, product_id, line_id FROM order_detail_main odm
+        JOIN order_main om ON odm.order_id = om.order_id
+        WHERE om.faktur_date >= %s AND om.faktur_date <= %s AND om.warehouse_id = %s
+        """
+        
+        with db_b_conn.cursor() as cursor:
+            cursor.execute(query_b, (start_date, end_date, warehouse_id_b))
+            existing_detail_keys = {(row[0], row[1], row[2]) for row in cursor.fetchall()}
+        
+        # Find missing order details
+        missing_details = []
+        for detail in all_details_a:
+            detail_key = (detail[1], detail[4], detail[5])  # (order_id, product_id, line_id)
+            if detail_key not in existing_detail_keys:
+                missing_details.append(detail)
+                if len(missing_details) >= 10:  # Limit to 10
+                    break
         
         if missing_details:
             logger.warning(f"Found {len(missing_details)} missing order details (showing first 10):")
