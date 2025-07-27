@@ -129,26 +129,7 @@ copy_orders() {
     fi
 }
 
-# Create order clean payload from outbound tables
-create_payload() {
-    local warehouse_id=$1
-    local start_date=$2
-    local end_date=$3
-    
-    if [ -z "$warehouse_id" ] || [ -z "$start_date" ] || [ -z "$end_date" ]; then
-        error "Warehouse ID, start date, and end date are required for payload creation"
-        warning "To create payload, run: ./run_database_operations.sh --create-payload WAREHOUSE_ID YYYY-MM-DD YYYY-MM-DD"
-        return 1
-    fi
-    
-    log "Creating order clean payload from outbound tables (${start_date} to ${end_date}, warehouse: ${warehouse_id})..."
-    if python3 create_order_clean_payload.py --start-date "$start_date" --end-date "$end_date" --warehouse-id "$warehouse_id"; then
-        success "Order clean payload created successfully"
-    else
-        error "Failed to create order clean payload"
-        exit 1
-    fi
-}
+
 
 # Show usage
 show_usage() {
@@ -162,7 +143,6 @@ show_usage() {
     echo "  --copy-products-upsert-batch BATCH_SIZE DELAY  Copy product data with UPSERT and custom batch"
     echo "  --copy-orders START END WAREHOUSE_ID   Copy order data with date range and warehouse filter"
     echo "  --copy-all START END WAREHOUSE_ID      Copy all data (products + orders with date range and warehouse filter)"
-    echo "  --create-payload WAREHOUSE_ID START END Create order clean payload from outbound tables"
     echo "  --help                    Show this help message"
     echo ""
     echo "Examples:"
@@ -173,7 +153,6 @@ show_usage() {
     echo "  $0 --copy-products-upsert-batch 10000 30"
     echo "  $0 --copy-orders 2024-01-01 2024-01-31 WAREHOUSE_001"
     echo "  $0 --copy-all 2024-01-01 2024-01-31 WAREHOUSE_001"
-    echo "  $0 --create-payload WAREHOUSE_001 2024-01-01 2024-01-31"
 }
 
 # Main function
@@ -245,15 +224,7 @@ main() {
             copy_orders "$2" "$3" "$4"
             success "All operations completed successfully"
             ;;
-        --create-payload)
-            if [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ]; then
-                error "Warehouse ID, start date, and end date are required for payload creation"
-                show_usage
-                exit 1
-            fi
-            create_payload "$2" "$3" "$4"
-            success "Payload creation completed successfully"
-            ;;
+
         --help|-h)
             show_usage
             ;;
