@@ -252,7 +252,7 @@ def find_missing_order_details(db_a_conn, db_b_conn, warehouse_id_a, warehouse_i
         
         # Get all order detail keys from Database B
         query_b = """
-        SELECT order_id, product_id, line_id FROM order_detail_main odm
+        SELECT odm.order_id, odm.product_id, odm.line_id FROM order_detail_main odm
         JOIN order_main om ON odm.order_id = om.order_id
         WHERE om.faktur_date >= %s AND om.faktur_date <= %s AND om.warehouse_id = %s
         """
