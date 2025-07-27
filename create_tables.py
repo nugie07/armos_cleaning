@@ -111,7 +111,7 @@ def create_order_main_table(conn):
         address_change BOOLEAN DEFAULT FALSE,
         divisi VARCHAR(100),
         pre_status VARCHAR(50),
-        UNIQUE(faktur_id, faktur_date, customer_id)
+        -- Removed composite unique constraint to allow multiple order_id with same faktur_id
     );
     """
     

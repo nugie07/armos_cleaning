@@ -120,7 +120,7 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
             if not batch_data:
                 break
             
-            # Insert batch into target using composite key
+            # Insert batch into target using order_id as primary key
             insert_query = """
             INSERT INTO order_main (
                 order_id, faktur_id, faktur_date, delivery_date, do_number, status, skip_count,
@@ -133,8 +133,9 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
                 rdo_integration_id, address_change, divisi, pre_status
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (faktur_id, faktur_date, customer_id) DO UPDATE SET
-                order_id = EXCLUDED.order_id,
+            ON CONFLICT (order_id) DO UPDATE SET
+                faktur_id = EXCLUDED.faktur_id,
+                faktur_date = EXCLUDED.faktur_date,
                 delivery_date = EXCLUDED.delivery_date,
                 do_number = EXCLUDED.do_number,
                 status = EXCLUDED.status,
@@ -144,6 +145,7 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
                 updated_date = EXCLUDED.updated_date,
                 updated_by = EXCLUDED.updated_by,
                 notes = EXCLUDED.notes,
+                customer_id = EXCLUDED.customer_id,
                 warehouse_id = EXCLUDED.warehouse_id,
                 delivery_type_id = EXCLUDED.delivery_type_id,
                 order_integration_id = EXCLUDED.order_integration_id,
