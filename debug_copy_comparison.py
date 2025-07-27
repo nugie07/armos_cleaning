@@ -344,13 +344,14 @@ def main():
         db_b_conn = get_db_connection('B')
         logger.info("✅ Connected to Database B successfully")
         
-        # Use warehouse_id as string for Database A (VARCHAR) and convert to integer for Database B if possible
-        warehouse_param_a = args.warehouse_id  # Always string for Database A
+        # Use warehouse_id as integer for Database A (INTEGER) and string for Database B (VARCHAR)
         try:
-            warehouse_param_b = int(args.warehouse_id)  # Try integer for Database B
-            logger.info(f"Using warehouse_id as string for DB A: {warehouse_param_a}, integer for DB B: {warehouse_param_b}")
+            warehouse_param_a = int(args.warehouse_id)  # Integer for Database A
+            warehouse_param_b = args.warehouse_id  # String for Database B
+            logger.info(f"Using warehouse_id as integer for DB A: {warehouse_param_a}, string for DB B: {warehouse_param_b}")
         except ValueError:
-            warehouse_param_b = args.warehouse_id  # Fallback to string for DB B
+            warehouse_param_a = args.warehouse_id  # Fallback to string for DB A
+            warehouse_param_b = args.warehouse_id  # String for Database B
             logger.info(f"Using warehouse_id as string for both DBs: {warehouse_param_a}")
         
         # Run comparisons
