@@ -240,7 +240,7 @@ def copy_order_detail_data_composite(source_conn, target_conn, start_date, end_d
                 # Get order_id from target database
                 lookup_query = """
                 SELECT order_id FROM order_main 
-                WHERE faktur_id = %s AND faktur_date = %s AND customer_id = %s
+                WHERE faktur_id = %s AND faktur_date = %s AND customer_id = %s::VARCHAR
                 """
                 
                 with target_conn.cursor() as cursor:
