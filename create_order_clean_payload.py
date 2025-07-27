@@ -135,24 +135,32 @@ def get_outbound_data(db_conn, warehouse_id, start_date, end_date, logger):
         
         logger.info(f"Found {len(items)} outbound items")
         
-        # Get outbound conversions
+        # Get outbound conversions (optional - table might not exist)
         logger.info("Fetching outbound conversions...")
-        conv_query = """
-        SELECT 
-            oc.id, oc.uom, oc.numerator, oc.denominator, oc.outbound_item_id
-        FROM outbound_conversion oc
-        JOIN outbound_items oi ON oc.outbound_item_id = oi.id
-        JOIN outbound_documents od ON oi.outbound_document_id = od.id
-        WHERE od.origin_id = %s 
-        AND od.create_date BETWEEN %s AND %s
-        ORDER BY oc.outbound_item_id
-        """
-        
-        with db_conn.cursor() as cursor:
-            cursor.execute(conv_query, (warehouse_param, start_date, end_date))
-            conversions = cursor.fetchall()
-        
-        logger.info(f"Found {len(conversions)} outbound conversions")
+        try:
+            conv_query = """
+            SELECT 
+                oc.id, oc.uom, oc.numerator, oc.denominator, oc.outbound_item_id
+            FROM outbound_conversions oc
+            JOIN outbound_items oi ON oc.outbound_item_id = oi.id
+            JOIN outbound_documents od ON oi.outbound_document_id = od.id
+            WHERE od.origin_id = %s 
+            AND od.create_date BETWEEN %s AND %s
+            ORDER BY oc.outbound_item_id
+            """
+            
+            with db_conn.cursor() as cursor:
+                cursor.execute(conv_query, (warehouse_param, start_date, end_date))
+                conversions = cursor.fetchall()
+            
+            logger.info(f"Found {len(conversions)} outbound conversions")
+            
+        except Exception as e:
+            if "does not exist" in str(e):
+                logger.warning("Table outbound_conversions does not exist, skipping conversions")
+                conversions = []
+            else:
+                raise e
         
         return documents, items, conversions
         
