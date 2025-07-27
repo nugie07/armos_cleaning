@@ -152,19 +152,37 @@ def find_missing_orders(db_a_conn, db_b_conn, warehouse_id_a, warehouse_id_b, st
     """Find orders that exist in Database A but not in Database B"""
     logger.info("=== FINDING MISSING ORDERS ===")
     
-    query = """
-    SELECT o.order_id, o.faktur_id, o.faktur_date, o.customer_id, o.warehouse_id
-    FROM "order" o
-    WHERE o.faktur_date >= %s AND o.faktur_date <= %s AND o.warehouse_id = %s
-    AND NOT EXISTS (
-        SELECT 1 FROM order_main om 
-        WHERE om.order_id = o.order_id
-    )
-    ORDER BY o.faktur_date, o.order_id
-    LIMIT 10
+    # First check if order_main table exists in Database B
+    check_table_query = """
+    SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'order_main'
+    );
     """
     
     try:
+        with db_b_conn.cursor() as cursor:
+            cursor.execute(check_table_query)
+            table_exists = cursor.fetchone()[0]
+        
+        if not table_exists:
+            logger.warning("❌ order_main table does not exist in Database B")
+            logger.warning("Please run create_tables.py first to create the required tables")
+            return []
+        
+        query = """
+        SELECT o.order_id, o.faktur_id, o.faktur_date, o.customer_id, o.warehouse_id
+        FROM "order" o
+        WHERE o.faktur_date >= %s AND o.faktur_date <= %s AND o.warehouse_id = %s
+        AND NOT EXISTS (
+            SELECT 1 FROM order_main om 
+            WHERE om.order_id = o.order_id
+        )
+        ORDER BY o.faktur_date, o.order_id
+        LIMIT 10
+        """
+        
         with db_a_conn.cursor() as cursor:
             cursor.execute(query, (start_date, end_date, warehouse_id_a))
             missing_orders = cursor.fetchall()
@@ -186,22 +204,40 @@ def find_missing_order_details(db_a_conn, db_b_conn, warehouse_id_a, warehouse_i
     """Find order_details that exist in Database A but not in Database B"""
     logger.info("=== FINDING MISSING ORDER DETAILS ===")
     
-    query = """
-    SELECT od.order_detail_id, od.order_id, o.faktur_id, o.faktur_date, od.product_id, od.line_id
-    FROM order_detail od
-    JOIN "order" o ON od.order_id = o.order_id
-    WHERE o.faktur_date >= %s AND o.faktur_date <= %s AND o.warehouse_id = %s
-    AND NOT EXISTS (
-        SELECT 1 FROM order_detail_main odm 
-        WHERE odm.order_id = od.order_id 
-        AND odm.product_id = od.product_id 
-        AND odm.line_id = od.line_id
-    )
-    ORDER BY o.faktur_date, od.order_id
-    LIMIT 10
+    # First check if order_detail_main table exists in Database B
+    check_table_query = """
+    SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'order_detail_main'
+    );
     """
     
     try:
+        with db_b_conn.cursor() as cursor:
+            cursor.execute(check_table_query)
+            table_exists = cursor.fetchone()[0]
+        
+        if not table_exists:
+            logger.warning("❌ order_detail_main table does not exist in Database B")
+            logger.warning("Please run create_tables.py first to create the required tables")
+            return []
+        
+        query = """
+        SELECT od.order_detail_id, od.order_id, o.faktur_id, o.faktur_date, od.product_id, od.line_id
+        FROM order_detail od
+        JOIN "order" o ON od.order_id = o.order_id
+        WHERE o.faktur_date >= %s AND o.faktur_date <= %s AND o.warehouse_id = %s
+        AND NOT EXISTS (
+            SELECT 1 FROM order_detail_main odm 
+            WHERE odm.order_id = od.order_id 
+            AND odm.product_id = od.product_id 
+            AND odm.line_id = od.line_id
+        )
+        ORDER BY o.faktur_date, od.order_id
+        LIMIT 10
+        """
+        
         with db_a_conn.cursor() as cursor:
             cursor.execute(query, (start_date, end_date, warehouse_id_a))
             missing_details = cursor.fetchall()
@@ -249,12 +285,28 @@ def show_sample_data_comparison(db_a_conn, db_b_conn, warehouse_id_a, warehouse_
             for order in orders_a:
                 logger.info(f"  order_id={order[0]}, faktur_id={order[1]}, date={order[2]}, customer={order[3]}, warehouse={order[4]}, do={order[5]}")
         
-        logger.info("--- Database B (Target) Sample Orders ---")
+        # Check if order_main table exists before querying Database B
+        check_table_query = """
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'order_main'
+        );
+        """
+        
         with db_b_conn.cursor() as cursor:
-            cursor.execute(query_b, (start_date, end_date, warehouse_id_b))
-            orders_b = cursor.fetchall()
-            for order in orders_b:
-                logger.info(f"  order_id={order[0]}, faktur_id={order[1]}, date={order[2]}, customer={order[3]}, warehouse={order[4]}, do={order[5]}")
+            cursor.execute(check_table_query)
+            table_exists = cursor.fetchone()[0]
+        
+        if table_exists:
+            logger.info("--- Database B (Target) Sample Orders ---")
+            with db_b_conn.cursor() as cursor:
+                cursor.execute(query_b, (start_date, end_date, warehouse_id_b))
+                orders_b = cursor.fetchall()
+                for order in orders_b:
+                    logger.info(f"  order_id={order[0]}, faktur_id={order[1]}, date={order[2]}, customer={order[3]}, warehouse={order[4]}, do={order[5]}")
+        else:
+            logger.warning("❌ order_main table does not exist in Database B - skipping sample data")
         
     except Exception as e:
         logger.error(f"Error showing sample data: {str(e)}")
