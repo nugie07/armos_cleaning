@@ -47,6 +47,10 @@ def get_db_connection(database_type):
 
 def check_missing_orders(logger, warehouse_id, start_date, end_date):
     """Check specific missing orders"""
+    # Convert string dates to datetime.date for comparison
+    start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+    
     conn_a = get_db_connection('A')
     conn_b = get_db_connection('B')
     
@@ -82,7 +86,7 @@ def check_missing_orders(logger, warehouse_id, start_date, end_date):
                 logger.info(f"  status={order_a[6]}, created={order_a[7]}")
                 
                 # Check if it should be included in our copy criteria
-                if (order_a[2] >= start_date and order_a[2] <= end_date and 
+                if (order_a[2] >= start_date_obj and order_a[2] <= end_date_obj and 
                     order_a[4] == warehouse_id):
                     logger.info(f"  ✅ Should be copied (matches criteria)")
                 else:
@@ -123,7 +127,7 @@ def check_missing_orders(logger, warehouse_id, start_date, end_date):
             logger.info(f"  order_id={order_99998_a[0]}, faktur_id={order_99998_a[1]}, date={order_99998_a[2]}")
             logger.info(f"  customer={order_99998_a[3]}, warehouse={order_99998_a[4]}, do={order_99998_a[5]}")
             
-            if (order_99998_a[2] >= start_date and order_99998_a[2] <= end_date and 
+            if (order_99998_a[2] >= start_date_obj and order_99998_a[2] <= end_date_obj and 
                 order_99998_a[4] == warehouse_id):
                 logger.info(f"  ✅ Should be copied (matches criteria)")
             else:
