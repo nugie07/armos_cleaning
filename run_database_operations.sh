@@ -129,6 +129,27 @@ copy_orders() {
     fi
 }
 
+# Fill order detail main from outbound data
+fill_order_details() {
+    local start_date=$1
+    local end_date=$2
+    local warehouse_id=$3
+    
+    if [ -z "$start_date" ] || [ -z "$end_date" ] || [ -z "$warehouse_id" ]; then
+        error "Start date, end date, and warehouse_id are required for order detail fill"
+        warning "To fill order details, run: ./run_database_operations.sh --fill-order-details YYYY-MM-DD YYYY-MM-DD WAREHOUSE_ID"
+        return 1
+    fi
+    
+    log "Filling order_detail_main from outbound data (${start_date} to ${end_date}, warehouse: ${warehouse_id})..."
+    if python3 fill_order_detail_main.py --start-date "$start_date" --end-date "$end_date" --warehouse-id "$warehouse_id"; then
+        success "Order detail fill completed successfully"
+    else
+        error "Failed to fill order details"
+        exit 1
+    fi
+}
+
 
 
 # Show usage
@@ -143,6 +164,7 @@ show_usage() {
     echo "  --copy-products-upsert-batch BATCH_SIZE DELAY  Copy product data with UPSERT and custom batch"
     echo "  --copy-orders START END WAREHOUSE_ID   Copy order data with date range and warehouse filter"
     echo "  --copy-all START END WAREHOUSE_ID      Copy all data (products + orders with date range and warehouse filter)"
+    echo "  --fill-order-details START END WAREHOUSE_ID Fill order_detail_main from outbound data"
     echo "  --help                    Show this help message"
     echo ""
     echo "Examples:"
@@ -153,6 +175,7 @@ show_usage() {
     echo "  $0 --copy-products-upsert-batch 10000 30"
     echo "  $0 --copy-orders 2024-01-01 2024-01-31 WAREHOUSE_001"
     echo "  $0 --copy-all 2024-01-01 2024-01-31 WAREHOUSE_001"
+    echo "  $0 --fill-order-details 2024-01-01 2024-01-31 WAREHOUSE_001"
 }
 
 # Main function
@@ -223,6 +246,15 @@ main() {
             copy_products
             copy_orders "$2" "$3" "$4"
             success "All operations completed successfully"
+            ;;
+        --fill-order-details)
+            if [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ]; then
+                error "Start date, end date, and warehouse_id are required for order detail fill"
+                show_usage
+                exit 1
+            fi
+            fill_order_details "$2" "$3" "$4"
+            success "Order detail fill completed successfully"
             ;;
 
         --help|-h)
