@@ -133,7 +133,42 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
                 rdo_integration_id, address_change, divisi, pre_status
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (faktur_id, faktur_date, customer_id) DO NOTHING
+            ON CONFLICT (order_id) DO UPDATE SET
+                faktur_id = EXCLUDED.faktur_id,
+                faktur_date = EXCLUDED.faktur_date,
+                delivery_date = EXCLUDED.delivery_date,
+                do_number = EXCLUDED.do_number,
+                status = EXCLUDED.status,
+                skip_count = EXCLUDED.skip_count,
+                created_date = EXCLUDED.created_date,
+                created_by = EXCLUDED.created_by,
+                updated_date = EXCLUDED.updated_date,
+                updated_by = EXCLUDED.updated_by,
+                notes = EXCLUDED.notes,
+                customer_id = EXCLUDED.customer_id,
+                warehouse_id = EXCLUDED.warehouse_id,
+                delivery_type_id = EXCLUDED.delivery_type_id,
+                order_integration_id = EXCLUDED.order_integration_id,
+                origin_name = EXCLUDED.origin_name,
+                origin_address_1 = EXCLUDED.origin_address_1,
+                origin_address_2 = EXCLUDED.origin_address_2,
+                origin_city = EXCLUDED.origin_city,
+                origin_zipcode = EXCLUDED.origin_zipcode,
+                origin_phone = EXCLUDED.origin_phone,
+                origin_email = EXCLUDED.origin_email,
+                destination_name = EXCLUDED.destination_name,
+                destination_address_1 = EXCLUDED.destination_address_1,
+                destination_address_2 = EXCLUDED.destination_address_2,
+                destination_city = EXCLUDED.destination_city,
+                destination_zip_code = EXCLUDED.destination_zip_code,
+                destination_phone = EXCLUDED.destination_phone,
+                destination_email = EXCLUDED.destination_email,
+                client_id = EXCLUDED.client_id,
+                cancel_reason = EXCLUDED.cancel_reason,
+                rdo_integration_id = EXCLUDED.rdo_integration_id,
+                address_change = EXCLUDED.address_change,
+                divisi = EXCLUDED.divisi,
+                pre_status = EXCLUDED.pre_status
             """
             
             retry_count = 0
@@ -268,7 +303,24 @@ def copy_order_detail_data_composite(source_conn, target_conn, start_date, end_d
                 total_ctn, total_pcs, order_id
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                      %s, %s, %s, %s)
-            ON CONFLICT (order_id, product_id, line_id) DO NOTHING
+            ON CONFLICT (order_id, product_id, line_id) DO UPDATE SET
+                quantity_faktur = EXCLUDED.quantity_faktur,
+                net_price = EXCLUDED.net_price,
+                quantity_wms = EXCLUDED.quantity_wms,
+                quantity_delivery = EXCLUDED.quantity_delivery,
+                quantity_loading = EXCLUDED.quantity_loading,
+                quantity_unloading = EXCLUDED.quantity_unloading,
+                status = EXCLUDED.status,
+                cancel_reason = EXCLUDED.cancel_reason,
+                notes = EXCLUDED.notes,
+                unit_id = EXCLUDED.unit_id,
+                pack_id = EXCLUDED.pack_id,
+                unloading_latitude = EXCLUDED.unloading_latitude,
+                unloading_longitude = EXCLUDED.unloading_longitude,
+                origin_uom = EXCLUDED.origin_uom,
+                origin_qty = EXCLUDED.origin_qty,
+                total_ctn = EXCLUDED.total_ctn,
+                total_pcs = EXCLUDED.total_pcs
             """
             
             retry_count = 0
