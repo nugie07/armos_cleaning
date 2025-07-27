@@ -60,7 +60,7 @@ def get_db_connection(database_type):
         logging.error(f"Failed to connect to database {database_type}: {str(e)}")
         raise
 
-def compare_order_counts(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
+def compare_order_counts(db_a_conn, db_b_conn, warehouse_id_a, warehouse_id_b, start_date, end_date, logger):
     """Compare order counts between Database A and B"""
     logger.info("=== ORDER COUNT COMPARISON ===")
     
@@ -81,11 +81,11 @@ def compare_order_counts(db_a_conn, db_b_conn, warehouse_id, start_date, end_dat
     try:
         # Get counts from both databases
         with db_a_conn.cursor() as cursor:
-            cursor.execute(query_a, (start_date, end_date, warehouse_id))
+            cursor.execute(query_a, (start_date, end_date, warehouse_id_a))
             count_a = cursor.fetchone()[0]
         
         with db_b_conn.cursor() as cursor:
-            cursor.execute(query_b, (start_date, end_date, warehouse_id))
+            cursor.execute(query_b, (start_date, end_date, warehouse_id_b))
             count_b = cursor.fetchone()[0]
         
         logger.info(f"Database A (source) orders: {count_a}")
@@ -103,7 +103,7 @@ def compare_order_counts(db_a_conn, db_b_conn, warehouse_id, start_date, end_dat
         logger.error(f"Error comparing order counts: {str(e)}")
         raise
 
-def compare_order_detail_counts(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
+def compare_order_detail_counts(db_a_conn, db_b_conn, warehouse_id_a, warehouse_id_b, start_date, end_date, logger):
     """Compare order_detail counts between Database A and B"""
     logger.info("=== ORDER DETAIL COUNT COMPARISON ===")
     
@@ -126,11 +126,11 @@ def compare_order_detail_counts(db_a_conn, db_b_conn, warehouse_id, start_date, 
     try:
         # Get counts from both databases
         with db_a_conn.cursor() as cursor:
-            cursor.execute(query_a, (start_date, end_date, warehouse_id))
+            cursor.execute(query_a, (start_date, end_date, warehouse_id_a))
             count_a = cursor.fetchone()[0]
         
         with db_b_conn.cursor() as cursor:
-            cursor.execute(query_b, (start_date, end_date, warehouse_id))
+            cursor.execute(query_b, (start_date, end_date, warehouse_id_b))
             count_b = cursor.fetchone()[0]
         
         logger.info(f"Database A (source) order_details: {count_a}")
@@ -148,7 +148,7 @@ def compare_order_detail_counts(db_a_conn, db_b_conn, warehouse_id, start_date, 
         logger.error(f"Error comparing order detail counts: {str(e)}")
         raise
 
-def find_missing_orders(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
+def find_missing_orders(db_a_conn, db_b_conn, warehouse_id_a, warehouse_id_b, start_date, end_date, logger):
     """Find orders that exist in Database A but not in Database B"""
     logger.info("=== FINDING MISSING ORDERS ===")
     
@@ -166,7 +166,7 @@ def find_missing_orders(db_a_conn, db_b_conn, warehouse_id, start_date, end_date
     
     try:
         with db_a_conn.cursor() as cursor:
-            cursor.execute(query, (start_date, end_date, warehouse_id))
+            cursor.execute(query, (start_date, end_date, warehouse_id_a))
             missing_orders = cursor.fetchall()
         
         if missing_orders:
@@ -182,7 +182,7 @@ def find_missing_orders(db_a_conn, db_b_conn, warehouse_id, start_date, end_date
         logger.error(f"Error finding missing orders: {str(e)}")
         raise
 
-def find_missing_order_details(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
+def find_missing_order_details(db_a_conn, db_b_conn, warehouse_id_a, warehouse_id_b, start_date, end_date, logger):
     """Find order_details that exist in Database A but not in Database B"""
     logger.info("=== FINDING MISSING ORDER DETAILS ===")
     
@@ -203,7 +203,7 @@ def find_missing_order_details(db_a_conn, db_b_conn, warehouse_id, start_date, e
     
     try:
         with db_a_conn.cursor() as cursor:
-            cursor.execute(query, (start_date, end_date, warehouse_id))
+            cursor.execute(query, (start_date, end_date, warehouse_id_a))
             missing_details = cursor.fetchall()
         
         if missing_details:
@@ -219,7 +219,7 @@ def find_missing_order_details(db_a_conn, db_b_conn, warehouse_id, start_date, e
         logger.error(f"Error finding missing order details: {str(e)}")
         raise
 
-def show_sample_data_comparison(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
+def show_sample_data_comparison(db_a_conn, db_b_conn, warehouse_id_a, warehouse_id_b, start_date, end_date, logger):
     """Show sample data from both databases for comparison"""
     logger.info("=== SAMPLE DATA COMPARISON ===")
     
@@ -244,14 +244,14 @@ def show_sample_data_comparison(db_a_conn, db_b_conn, warehouse_id, start_date, 
     try:
         logger.info("--- Database A (Source) Sample Orders ---")
         with db_a_conn.cursor() as cursor:
-            cursor.execute(query_a, (start_date, end_date, warehouse_id))
+            cursor.execute(query_a, (start_date, end_date, warehouse_id_a))
             orders_a = cursor.fetchall()
             for order in orders_a:
                 logger.info(f"  order_id={order[0]}, faktur_id={order[1]}, date={order[2]}, customer={order[3]}, warehouse={order[4]}, do={order[5]}")
         
         logger.info("--- Database B (Target) Sample Orders ---")
         with db_b_conn.cursor() as cursor:
-            cursor.execute(query_b, (start_date, end_date, warehouse_id))
+            cursor.execute(query_b, (start_date, end_date, warehouse_id_b))
             orders_b = cursor.fetchall()
             for order in orders_b:
                 logger.info(f"  order_id={order[0]}, faktur_id={order[1]}, date={order[2]}, customer={order[3]}, warehouse={order[4]}, do={order[5]}")
@@ -260,7 +260,7 @@ def show_sample_data_comparison(db_a_conn, db_b_conn, warehouse_id, start_date, 
         logger.error(f"Error showing sample data: {str(e)}")
         raise
 
-def check_copy_queries(db_a_conn, warehouse_id, start_date, end_date, logger):
+def check_copy_queries(db_a_conn, warehouse_id_a, start_date, end_date, logger):
     """Show the actual queries that would be used for copying"""
     logger.info("=== COPY QUERIES ANALYSIS ===")
     
@@ -299,14 +299,14 @@ def check_copy_queries(db_a_conn, warehouse_id, start_date, end_date, logger):
     try:
         logger.info("--- Order Copy Query Sample ---")
         with db_a_conn.cursor() as cursor:
-            cursor.execute(order_query, (start_date, end_date, warehouse_id))
+            cursor.execute(order_query, (start_date, end_date, warehouse_id_a))
             orders = cursor.fetchall()
             for order in orders:
                 logger.info(f"  order_id={order[0]}, faktur_id={order[1]}, date={order[2]}, customer={order[12]}, warehouse={order[13]}")
         
         logger.info("--- Order Detail Copy Query Sample ---")
         with db_a_conn.cursor() as cursor:
-            cursor.execute(detail_query, (start_date, end_date, warehouse_id))
+            cursor.execute(detail_query, (start_date, end_date, warehouse_id_a))
             details = cursor.fetchall()
             for detail in details:
                 logger.info(f"  product={detail[9]}, line={detail[12]}, faktur_id={detail[19]}, date={detail[20]}, customer={detail[21]}")
@@ -344,22 +344,22 @@ def main():
         db_b_conn = get_db_connection('B')
         logger.info("✅ Connected to Database B successfully")
         
-        # Convert warehouse_id to integer if possible
+        # Use warehouse_id as string for Database A (VARCHAR) and convert to integer for Database B if possible
+        warehouse_param_a = args.warehouse_id  # Always string for Database A
         try:
-            warehouse_id_int = int(args.warehouse_id)
-            logger.info(f"Using warehouse_id as integer: {warehouse_id_int}")
-            warehouse_param = warehouse_id_int
+            warehouse_param_b = int(args.warehouse_id)  # Try integer for Database B
+            logger.info(f"Using warehouse_id as string for DB A: {warehouse_param_a}, integer for DB B: {warehouse_param_b}")
         except ValueError:
-            logger.info(f"Using warehouse_id as string: {args.warehouse_id}")
-            warehouse_param = args.warehouse_id
+            warehouse_param_b = args.warehouse_id  # Fallback to string for DB B
+            logger.info(f"Using warehouse_id as string for both DBs: {warehouse_param_a}")
         
         # Run comparisons
-        compare_order_counts(db_a_conn, db_b_conn, warehouse_param, args.start_date, args.end_date, logger)
-        compare_order_detail_counts(db_a_conn, db_b_conn, warehouse_param, args.start_date, args.end_date, logger)
-        find_missing_orders(db_a_conn, db_b_conn, warehouse_param, args.start_date, args.end_date, logger)
-        find_missing_order_details(db_a_conn, db_b_conn, warehouse_param, args.start_date, args.end_date, logger)
-        show_sample_data_comparison(db_a_conn, db_b_conn, warehouse_param, args.start_date, args.end_date, logger)
-        check_copy_queries(db_a_conn, warehouse_param, args.start_date, args.end_date, logger)
+        compare_order_counts(db_a_conn, db_b_conn, warehouse_param_a, warehouse_param_b, args.start_date, args.end_date, logger)
+        compare_order_detail_counts(db_a_conn, db_b_conn, warehouse_param_a, warehouse_param_b, args.start_date, args.end_date, logger)
+        find_missing_orders(db_a_conn, db_b_conn, warehouse_param_a, warehouse_param_b, args.start_date, args.end_date, logger)
+        find_missing_order_details(db_a_conn, db_b_conn, warehouse_param_a, warehouse_param_b, args.start_date, args.end_date, logger)
+        show_sample_data_comparison(db_a_conn, db_b_conn, warehouse_param_a, warehouse_param_b, args.start_date, args.end_date, logger)
+        check_copy_queries(db_a_conn, warehouse_param_a, args.start_date, args.end_date, logger)
         
         logger.info("=== DEBUG COMPLETED ===")
         
