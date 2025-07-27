@@ -74,10 +74,11 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
         logger.info(f"Using warehouse_id as string: {warehouse_id}")
         warehouse_param = warehouse_id
     
-    # Get total count for progress tracking
+    # Get total count for progress tracking - exclude orders with NULL faktur_id or customer_id
     count_query = """
     SELECT COUNT(*) FROM "order" 
     WHERE faktur_date >= %s AND faktur_date <= %s AND warehouse_id = %s
+    AND faktur_id IS NOT NULL AND customer_id IS NOT NULL
     """
     
     try:
@@ -85,10 +86,20 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
             cursor.execute(count_query, (start_date, end_date, warehouse_param))
             total_records = cursor.fetchone()[0]
         
-        logger.info(f"Found {total_records} order records to copy")
+        # Get total count including NULL values for comparison
+        total_count_query = """
+        SELECT COUNT(*) FROM "order" 
+        WHERE faktur_date >= %s AND faktur_date <= %s AND warehouse_id = %s
+        """
+        with source_conn.cursor() as cursor:
+            cursor.execute(total_count_query, (start_date, end_date, warehouse_param))
+            total_all_records = cursor.fetchone()[0]
+        
+        skipped_count = total_all_records - total_records
+        logger.info(f"Found {total_records} order records to copy (skipping {skipped_count} orders with NULL faktur_id or customer_id)")
         
         if total_records == 0:
-            logger.warning("No order records found for the specified date range")
+            logger.warning("No valid order records found for the specified date range")
             return 0
         
         # Copy data in batches
@@ -96,7 +107,7 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
         copied_count = 0
         
         while offset < total_records:
-                        # Fetch batch from source
+                        # Fetch batch from source - exclude orders with NULL faktur_id or customer_id
             select_query = """
             SELECT 
                 order_id, faktur_id, faktur_date, delivery_date, do_number, status, skip_count,
@@ -109,6 +120,7 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
                 rdo_integration_id, address_change, divisi, pre_status
             FROM "order"
             WHERE faktur_date >= %s AND faktur_date <= %s AND warehouse_id = %s
+            AND faktur_id IS NOT NULL AND customer_id IS NOT NULL
             ORDER BY faktur_date
             LIMIT %s OFFSET %s
             """
