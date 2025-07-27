@@ -82,8 +82,8 @@ def create_order_clean_payload_table(conn):
         logging.error(f"Failed to create order_clean_payload table: {str(e)}")
         raise
 
-def get_outbound_data(db_conn, warehouse_id, start_date, end_date, logger):
-    """Get outbound data from all three tables in Database B"""
+def get_do_numbers_from_order_main(db_conn, warehouse_id, start_date, end_date, logger):
+    """Get DO numbers from order_main table based on date range and warehouse_id"""
     try:
         # Try to convert warehouse_id to integer if possible
         try:
@@ -94,8 +94,43 @@ def get_outbound_data(db_conn, warehouse_id, start_date, end_date, logger):
             logger.info(f"Using warehouse_id as string: {warehouse_id}")
             warehouse_param = warehouse_id
         
-        # Get outbound documents
-        logger.info("Fetching outbound documents...")
+        # Get DO numbers from order_main
+        logger.info("Fetching DO numbers from order_main...")
+        do_query = """
+        SELECT DISTINCT do_number 
+        FROM order_main 
+        WHERE warehouse_id = %s 
+        AND faktur_date BETWEEN %s AND %s
+        AND do_number IS NOT NULL
+        ORDER BY do_number
+        """
+        
+        with db_conn.cursor() as cursor:
+            cursor.execute(do_query, (warehouse_param, start_date, end_date))
+            do_numbers = [row[0] for row in cursor.fetchall()]
+        
+        logger.info(f"Found {len(do_numbers)} unique DO numbers from order_main")
+        if do_numbers:
+            logger.info(f"Sample DO numbers: {do_numbers[:5]}")
+        
+        return do_numbers
+        
+    except Exception as e:
+        logger.error(f"Error fetching DO numbers: {str(e)}")
+        raise
+
+def get_outbound_data_by_do_numbers(db_conn, do_numbers, logger):
+    """Get outbound data from all three tables based on DO numbers"""
+    try:
+        if not do_numbers:
+            logger.warning("No DO numbers provided, returning empty results")
+            return [], [], []
+        
+        # Convert list to tuple for SQL IN clause
+        do_numbers_tuple = tuple(do_numbers)
+        
+        # Get outbound documents by DO numbers
+        logger.info("Fetching outbound documents by DO numbers...")
         docs_query = """
         SELECT 
             id, document_reference, picklist_reference, driver_name, kernet_name,
@@ -104,18 +139,17 @@ def get_outbound_data(db_conn, warehouse_id, start_date, end_date, logger):
             whs_user, dev_user, client_id, origin_id, origin_name, destination_id,
             destination_name, destination_address_1, divisi, order_value
         FROM outbound_documents 
-        WHERE origin_id = %s 
-        AND create_date BETWEEN %s AND %s
+        WHERE document_reference IN %s
         ORDER BY create_date
         """
         
         with db_conn.cursor() as cursor:
-            cursor.execute(docs_query, (warehouse_param, start_date, end_date))
+            cursor.execute(docs_query, (do_numbers_tuple,))
             documents = cursor.fetchall()
         
-        logger.info(f"Found {len(documents)} outbound documents")
+        logger.info(f"Found {len(documents)} matching outbound documents")
         
-        # Get outbound items
+        # Get outbound items for matching documents
         logger.info("Fetching outbound items...")
         items_query = """
         SELECT 
@@ -124,13 +158,12 @@ def get_outbound_data(db_conn, warehouse_id, start_date, end_date, logger):
             oi.group_description, oi.product_description, oi.outbound_document_id
         FROM outbound_items oi
         JOIN outbound_documents od ON oi.outbound_document_id = od.id
-        WHERE od.origin_id = %s 
-        AND od.create_date BETWEEN %s AND %s
+        WHERE od.document_reference IN %s
         ORDER BY oi.outbound_document_id, oi.line_id
         """
         
         with db_conn.cursor() as cursor:
-            cursor.execute(items_query, (warehouse_param, start_date, end_date))
+            cursor.execute(items_query, (do_numbers_tuple,))
             items = cursor.fetchall()
         
         logger.info(f"Found {len(items)} outbound items")
@@ -144,13 +177,12 @@ def get_outbound_data(db_conn, warehouse_id, start_date, end_date, logger):
             FROM outbound_conversions oc
             JOIN outbound_items oi ON oc.outbound_item_id = oi.id
             JOIN outbound_documents od ON oi.outbound_document_id = od.id
-            WHERE od.origin_id = %s 
-            AND od.create_date BETWEEN %s AND %s
+            WHERE od.document_reference IN %s
             ORDER BY oc.outbound_item_id
             """
             
             with db_conn.cursor() as cursor:
-                cursor.execute(conv_query, (warehouse_param, start_date, end_date))
+                cursor.execute(conv_query, (do_numbers_tuple,))
                 conversions = cursor.fetchall()
             
             logger.info(f"Found {len(conversions)} outbound conversions")
@@ -343,13 +375,22 @@ def main():
         # Create table if not exists
         create_order_clean_payload_table(db_conn)
         
-        # Get outbound data from Database B
-        documents, items, conversions = get_outbound_data(
+        # Get DO numbers from order_main first
+        do_numbers = get_do_numbers_from_order_main(
             db_conn, args.warehouse_id, start_date, end_date, logger
         )
         
+        if not do_numbers:
+            logger.warning("No DO numbers found in order_main for the specified criteria")
+            return 0
+        
+        # Get outbound data based on DO numbers
+        documents, items, conversions = get_outbound_data_by_do_numbers(
+            db_conn, do_numbers, logger
+        )
+        
         if not documents:
-            logger.warning("No outbound documents found for the specified criteria")
+            logger.warning("No matching outbound documents found for the DO numbers")
             return 0
         
         # Build JSON payloads
