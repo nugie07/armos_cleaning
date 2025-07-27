@@ -1,33 +1,40 @@
 #!/usr/bin/env python3
 """
-Debug script to compare data between Database A and Database B
-Check if copy process is working correctly
+Debug script to compare data between Database A (source) and Database B (target)
+for order and order_detail tables to identify differences in copy operations.
 """
 
 import os
-import psycopg2
+import sys
 import argparse
 import logging
+import psycopg2
 from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv('.env')
-load_dotenv('config.env')
+load_dotenv()
+if not os.getenv('DB_A_HOST'):
+    load_dotenv('config.env')
 
 def setup_logging():
     """Setup logging configuration"""
+    log_dir = os.path.dirname(os.getenv('LOG_FILE', './logs/database_operations.log'))
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO')),
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.StreamHandler()
+            logging.FileHandler(os.getenv('LOG_FILE', './logs/database_operations.log')),
+            logging.StreamHandler(sys.stdout)
         ]
     )
     return logging.getLogger(__name__)
 
 def get_db_connection(database_type):
-    """Get database connection"""
+    """Get database connection based on type (A or B)"""
     try:
         if database_type.upper() == 'A':
             conn = psycopg2.connect(
@@ -53,182 +60,264 @@ def get_db_connection(database_type):
         logging.error(f"Failed to connect to database {database_type}: {str(e)}")
         raise
 
-def check_orders_comparison(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
-    """Compare orders between Database A and Database B"""
+def compare_order_counts(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
+    """Compare order counts between Database A and B"""
+    logger.info("=== ORDER COUNT COMPARISON ===")
+    
+    # Database A query (source)
+    query_a = """
+    SELECT COUNT(*) as total_orders
+    FROM "order"
+    WHERE faktur_date >= %s AND faktur_date <= %s AND warehouse_id = %s
+    """
+    
+    # Database B query (target)
+    query_b = """
+    SELECT COUNT(*) as total_orders
+    FROM order_main
+    WHERE faktur_date >= %s AND faktur_date <= %s AND warehouse_id = %s
+    """
+    
     try:
-        # Check Database A (Source)
-        query_a = """
-        SELECT COUNT(*) as total_orders,
-               COUNT(DISTINCT faktur_id) as unique_faktur_ids,
-               MIN(faktur_date) as min_date,
-               MAX(faktur_date) as max_date
-        FROM "order"
-        WHERE faktur_date >= %s 
-        AND faktur_date <= %s 
-        AND warehouse_id = %s
-        """
-        
+        # Get counts from both databases
         with db_a_conn.cursor() as cursor:
             cursor.execute(query_a, (start_date, end_date, warehouse_id))
-            result_a = cursor.fetchone()
-            
-        # Check Database B (Target)
-        query_b = """
-        SELECT COUNT(*) as total_orders,
-               COUNT(DISTINCT faktur_id) as unique_faktur_ids,
-               MIN(faktur_date) as min_date,
-               MAX(faktur_date) as max_date
-        FROM order_main
-        WHERE faktur_date >= %s 
-        AND faktur_date <= %s 
-        AND warehouse_id = %s
-        """
+            count_a = cursor.fetchone()[0]
         
         with db_b_conn.cursor() as cursor:
             cursor.execute(query_b, (start_date, end_date, warehouse_id))
-            result_b = cursor.fetchone()
-            
-        logger.info("=== Orders Comparison ===")
-        logger.info(f"Database A (Source):")
-        logger.info(f"  Total orders: {result_a[0]}")
-        logger.info(f"  Unique faktur_ids: {result_a[1]}")
-        logger.info(f"  Date range: {result_a[2]} to {result_a[3]}")
+            count_b = cursor.fetchone()[0]
         
-        logger.info(f"Database B (Target):")
-        logger.info(f"  Total orders: {result_b[0]}")
-        logger.info(f"  Unique faktur_ids: {result_b[1]}")
-        logger.info(f"  Date range: {result_b[2]} to {result_b[3]}")
+        logger.info(f"Database A (source) orders: {count_a}")
+        logger.info(f"Database B (target) orders: {count_b}")
+        logger.info(f"Difference: {count_a - count_b}")
         
-        # Check differences
-        if result_a[0] != result_b[0]:
-            logger.warning(f"❌ Order count mismatch: A={result_a[0]}, B={result_b[0]}")
-            
-            # Find missing orders
-            missing_query = """
-            SELECT o.faktur_id, o.faktur_date, o.customer_id
-            FROM "order" o
-            LEFT JOIN order_main om ON o.faktur_id = om.faktur_id 
-                AND o.faktur_date = om.faktur_date 
-                AND o.customer_id::VARCHAR = om.customer_id
-            WHERE o.faktur_date >= %s 
-            AND o.faktur_date <= %s 
-            AND o.warehouse_id = %s
-            AND om.order_id IS NULL
-            LIMIT 10
-            """
-            
-            with db_a_conn.cursor() as cursor:
-                cursor.execute(missing_query, (start_date, end_date, warehouse_id))
-                missing_orders = cursor.fetchall()
-                
-            if missing_orders:
-                logger.warning(f"Sample missing orders (first 10):")
-                for order in missing_orders:
-                    logger.warning(f"  faktur_id: {order[0]}, date: {order[1]}, customer: {order[2]}")
+        if count_a != count_b:
+            logger.warning(f"❌ Order count mismatch! Missing {count_a - count_b} orders in Database B")
         else:
-            logger.info("✅ Order counts match!")
-            
-        return result_a[0], result_b[0]
+            logger.info("✅ Order counts match")
+        
+        return count_a, count_b
         
     except Exception as e:
-        logger.error(f"Error comparing orders: {str(e)}")
-        return 0, 0
+        logger.error(f"Error comparing order counts: {str(e)}")
+        raise
 
-def check_order_details_comparison(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
-    """Compare order details between Database A and Database B"""
+def compare_order_detail_counts(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
+    """Compare order_detail counts between Database A and B"""
+    logger.info("=== ORDER DETAIL COUNT COMPARISON ===")
+    
+    # Database A query (source)
+    query_a = """
+    SELECT COUNT(*) as total_order_details
+    FROM order_detail od
+    JOIN "order" o ON od.order_id = o.order_id
+    WHERE o.faktur_date >= %s AND o.faktur_date <= %s AND o.warehouse_id = %s
+    """
+    
+    # Database B query (target)
+    query_b = """
+    SELECT COUNT(*) as total_order_details
+    FROM order_detail_main odm
+    JOIN order_main om ON odm.order_id = om.order_id
+    WHERE om.faktur_date >= %s AND om.faktur_date <= %s AND om.warehouse_id = %s
+    """
+    
     try:
-        # Check Database A (Source)
-        query_a = """
-        SELECT COUNT(*) as total_details
-        FROM order_detail od
-        JOIN "order" o ON od.order_id = o.order_id
-        WHERE o.faktur_date >= %s 
-        AND o.faktur_date <= %s 
-        AND o.warehouse_id = %s
-        """
-        
+        # Get counts from both databases
         with db_a_conn.cursor() as cursor:
             cursor.execute(query_a, (start_date, end_date, warehouse_id))
-            result_a = cursor.fetchone()
-            
-        # Check Database B (Target)
-        query_b = """
-        SELECT COUNT(*) as total_details
-        FROM order_detail_main odm
-        JOIN order_main om ON odm.order_id = om.order_id
-        WHERE om.faktur_date >= %s 
-        AND om.faktur_date <= %s 
-        AND om.warehouse_id = %s
-        """
+            count_a = cursor.fetchone()[0]
         
         with db_b_conn.cursor() as cursor:
             cursor.execute(query_b, (start_date, end_date, warehouse_id))
-            result_b = cursor.fetchone()
-            
-        logger.info("=== Order Details Comparison ===")
-        logger.info(f"Database A (Source): {result_a[0]} order details")
-        logger.info(f"Database B (Target): {result_b[0]} order details")
+            count_b = cursor.fetchone()[0]
         
-        if result_a[0] != result_b[0]:
-            logger.warning(f"❌ Order detail count mismatch: A={result_a[0]}, B={result_b[0]}")
+        logger.info(f"Database A (source) order_details: {count_a}")
+        logger.info(f"Database B (target) order_details: {count_b}")
+        logger.info(f"Difference: {count_a - count_b}")
+        
+        if count_a != count_b:
+            logger.warning(f"❌ Order detail count mismatch! Missing {count_a - count_b} order_details in Database B")
         else:
-            logger.info("✅ Order detail counts match!")
-            
-        return result_a[0], result_b[0]
+            logger.info("✅ Order detail counts match")
+        
+        return count_a, count_b
         
     except Exception as e:
-        logger.error(f"Error comparing order details: {str(e)}")
-        return 0, 0
+        logger.error(f"Error comparing order detail counts: {str(e)}")
+        raise
 
-def check_sample_data(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
-    """Check sample data from both databases"""
+def find_missing_orders(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
+    """Find orders that exist in Database A but not in Database B"""
+    logger.info("=== FINDING MISSING ORDERS ===")
+    
+    query = """
+    SELECT o.order_id, o.faktur_id, o.faktur_date, o.customer_id, o.warehouse_id
+    FROM "order" o
+    WHERE o.faktur_date >= %s AND o.faktur_date <= %s AND o.warehouse_id = %s
+    AND NOT EXISTS (
+        SELECT 1 FROM order_main om 
+        WHERE om.order_id = o.order_id
+    )
+    ORDER BY o.faktur_date, o.order_id
+    LIMIT 10
+    """
+    
     try:
-        logger.info("=== Sample Data Comparison ===")
+        with db_a_conn.cursor() as cursor:
+            cursor.execute(query, (start_date, end_date, warehouse_id))
+            missing_orders = cursor.fetchall()
         
-        # Sample from Database A
-        query_a = """
-        SELECT faktur_id, faktur_date, customer_id, warehouse_id
-        FROM "order"
-        WHERE faktur_date >= %s 
-        AND faktur_date <= %s 
-        AND warehouse_id = %s
-        ORDER BY faktur_date
-        LIMIT 5
-        """
+        if missing_orders:
+            logger.warning(f"Found {len(missing_orders)} missing orders (showing first 10):")
+            for order in missing_orders:
+                logger.warning(f"  Missing: order_id={order[0]}, faktur_id={order[1]}, date={order[2]}, customer={order[3]}, warehouse={order[4]}")
+        else:
+            logger.info("✅ No missing orders found")
         
+        return missing_orders
+        
+    except Exception as e:
+        logger.error(f"Error finding missing orders: {str(e)}")
+        raise
+
+def find_missing_order_details(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
+    """Find order_details that exist in Database A but not in Database B"""
+    logger.info("=== FINDING MISSING ORDER DETAILS ===")
+    
+    query = """
+    SELECT od.order_detail_id, od.order_id, o.faktur_id, o.faktur_date, od.product_id, od.line_id
+    FROM order_detail od
+    JOIN "order" o ON od.order_id = o.order_id
+    WHERE o.faktur_date >= %s AND o.faktur_date <= %s AND o.warehouse_id = %s
+    AND NOT EXISTS (
+        SELECT 1 FROM order_detail_main odm 
+        WHERE odm.order_id = od.order_id 
+        AND odm.product_id = od.product_id 
+        AND odm.line_id = od.line_id
+    )
+    ORDER BY o.faktur_date, od.order_id
+    LIMIT 10
+    """
+    
+    try:
+        with db_a_conn.cursor() as cursor:
+            cursor.execute(query, (start_date, end_date, warehouse_id))
+            missing_details = cursor.fetchall()
+        
+        if missing_details:
+            logger.warning(f"Found {len(missing_details)} missing order details (showing first 10):")
+            for detail in missing_details:
+                logger.warning(f"  Missing: detail_id={detail[0]}, order_id={detail[1]}, faktur_id={detail[2]}, date={detail[3]}, product={detail[4]}, line={detail[5]}")
+        else:
+            logger.info("✅ No missing order details found")
+        
+        return missing_details
+        
+    except Exception as e:
+        logger.error(f"Error finding missing order details: {str(e)}")
+        raise
+
+def show_sample_data_comparison(db_a_conn, db_b_conn, warehouse_id, start_date, end_date, logger):
+    """Show sample data from both databases for comparison"""
+    logger.info("=== SAMPLE DATA COMPARISON ===")
+    
+    # Sample orders from Database A
+    query_a = """
+    SELECT order_id, faktur_id, faktur_date, customer_id, warehouse_id, do_number
+    FROM "order"
+    WHERE faktur_date >= %s AND faktur_date <= %s AND warehouse_id = %s
+    ORDER BY faktur_date, order_id
+    LIMIT 5
+    """
+    
+    # Sample orders from Database B
+    query_b = """
+    SELECT order_id, faktur_id, faktur_date, customer_id, warehouse_id, do_number
+    FROM order_main
+    WHERE faktur_date >= %s AND faktur_date <= %s AND warehouse_id = %s
+    ORDER BY faktur_date, order_id
+    LIMIT 5
+    """
+    
+    try:
+        logger.info("--- Database A (Source) Sample Orders ---")
         with db_a_conn.cursor() as cursor:
             cursor.execute(query_a, (start_date, end_date, warehouse_id))
-            sample_a = cursor.fetchall()
-            
-        logger.info(f"Database A sample (first 5):")
-        for i, record in enumerate(sample_a, 1):
-            logger.info(f"  {i}. faktur_id: {record[0]}, date: {record[1]}, customer: {record[2]}, warehouse: {record[3]}")
-            
-        # Sample from Database B
-        query_b = """
-        SELECT faktur_id, faktur_date, customer_id, warehouse_id
-        FROM order_main
-        WHERE faktur_date >= %s 
-        AND faktur_date <= %s 
-        AND warehouse_id = %s
-        ORDER BY faktur_date
-        LIMIT 5
-        """
+            orders_a = cursor.fetchall()
+            for order in orders_a:
+                logger.info(f"  order_id={order[0]}, faktur_id={order[1]}, date={order[2]}, customer={order[3]}, warehouse={order[4]}, do={order[5]}")
         
+        logger.info("--- Database B (Target) Sample Orders ---")
         with db_b_conn.cursor() as cursor:
             cursor.execute(query_b, (start_date, end_date, warehouse_id))
-            sample_b = cursor.fetchall()
-            
-        logger.info(f"Database B sample (first 5):")
-        for i, record in enumerate(sample_b, 1):
-            logger.info(f"  {i}. faktur_id: {record[0]}, date: {record[1]}, customer: {record[2]}, warehouse: {record[3]}")
-            
+            orders_b = cursor.fetchall()
+            for order in orders_b:
+                logger.info(f"  order_id={order[0]}, faktur_id={order[1]}, date={order[2]}, customer={order[3]}, warehouse={order[4]}, do={order[5]}")
+        
     except Exception as e:
-        logger.error(f"Error checking sample data: {str(e)}")
+        logger.error(f"Error showing sample data: {str(e)}")
+        raise
+
+def check_copy_queries(db_a_conn, warehouse_id, start_date, end_date, logger):
+    """Show the actual queries that would be used for copying"""
+    logger.info("=== COPY QUERIES ANALYSIS ===")
+    
+    # Order copy query
+    order_query = """
+    SELECT 
+        order_id, faktur_id, faktur_date, delivery_date, do_number, status, skip_count,
+        created_date, created_by, updated_date, updated_by, notes, customer_id,
+        warehouse_id, delivery_type_id, order_integration_id, origin_name,
+        origin_address_1, origin_address_2, origin_city, origin_zipcode,
+        origin_phone, origin_email, destination_name, destination_address_1,
+        destination_address_2, destination_city, destination_zip_code,
+        destination_phone, destination_email, client_id, cancel_reason,
+        rdo_integration_id, address_change, divisi, pre_status
+    FROM "order"
+    WHERE faktur_date >= %s AND faktur_date <= %s AND warehouse_id = %s
+    ORDER BY faktur_date
+    LIMIT 3
+    """
+    
+    # Order detail copy query
+    detail_query = """
+    SELECT 
+        od.quantity_faktur, od.net_price, od.quantity_wms, od.quantity_delivery,
+        od.quantity_loading, od.quantity_unloading, od.status, od.cancel_reason,
+        od.notes, od.product_id, od.unit_id, od.pack_id, od.line_id,
+        od.unloading_latitude, od.unloading_longitude, od.origin_uom, od.origin_qty,
+        od.total_ctn, od.total_pcs, o.faktur_id, o.faktur_date, o.customer_id
+    FROM order_detail od
+    JOIN "order" o ON od.order_id = o.order_id
+    WHERE o.faktur_date >= %s AND o.faktur_date <= %s AND o.warehouse_id = %s
+    ORDER BY o.faktur_date
+    LIMIT 3
+    """
+    
+    try:
+        logger.info("--- Order Copy Query Sample ---")
+        with db_a_conn.cursor() as cursor:
+            cursor.execute(order_query, (start_date, end_date, warehouse_id))
+            orders = cursor.fetchall()
+            for order in orders:
+                logger.info(f"  order_id={order[0]}, faktur_id={order[1]}, date={order[2]}, customer={order[12]}, warehouse={order[13]}")
+        
+        logger.info("--- Order Detail Copy Query Sample ---")
+        with db_a_conn.cursor() as cursor:
+            cursor.execute(detail_query, (start_date, end_date, warehouse_id))
+            details = cursor.fetchall()
+            for detail in details:
+                logger.info(f"  product={detail[9]}, line={detail[12]}, faktur_id={detail[19]}, date={detail[20]}, customer={detail[21]}")
+        
+    except Exception as e:
+        logger.error(f"Error checking copy queries: {str(e)}")
+        raise
 
 def main():
     """Main function"""
-    parser = argparse.ArgumentParser(description='Compare data between Database A and Database B')
+    parser = argparse.ArgumentParser(description='Debug script to compare data between Database A and B')
     parser.add_argument('--warehouse-id', required=True, type=str,
                        help='Warehouse ID to filter data')
     parser.add_argument('--start-date', required=True, type=str, 
@@ -238,56 +327,52 @@ def main():
     
     args = parser.parse_args()
     
-    # Validate date format
-    try:
-        start_date = datetime.strptime(args.start_date, '%Y-%m-%d').date()
-        end_date = datetime.strptime(args.end_date, '%Y-%m-%d').date()
-    except ValueError as e:
-        print(f"Invalid date format: {e}")
-        return 1
-    
+    # Setup logging
     logger = setup_logging()
     
-    logger.info("=== Copy Comparison Debug ===")
+    logger.info("=== DATABASE COPY COMPARISON DEBUG ===")
     logger.info(f"Warehouse ID: {args.warehouse_id}")
-    logger.info(f"Date Range: {start_date} to {end_date}")
-    
-    db_a_conn = None
-    db_b_conn = None
+    logger.info(f"Date Range: {args.start_date} to {args.end_date}")
     
     try:
         # Connect to both databases
+        logger.info("Connecting to Database A (source)...")
         db_a_conn = get_db_connection('A')
+        logger.info("✅ Connected to Database A successfully")
+        
+        logger.info("Connecting to Database B (target)...")
         db_b_conn = get_db_connection('B')
-        logger.info("✓ Connected to both databases successfully")
+        logger.info("✅ Connected to Database B successfully")
         
-        # Compare orders
-        orders_a, orders_b = check_orders_comparison(db_a_conn, db_b_conn, args.warehouse_id, start_date, end_date, logger)
-        logger.info("")
+        # Convert warehouse_id to integer if possible
+        try:
+            warehouse_id_int = int(args.warehouse_id)
+            logger.info(f"Using warehouse_id as integer: {warehouse_id_int}")
+            warehouse_param = warehouse_id_int
+        except ValueError:
+            logger.info(f"Using warehouse_id as string: {args.warehouse_id}")
+            warehouse_param = args.warehouse_id
         
-        # Compare order details
-        details_a, details_b = check_order_details_comparison(db_a_conn, db_b_conn, args.warehouse_id, start_date, end_date, logger)
-        logger.info("")
+        # Run comparisons
+        compare_order_counts(db_a_conn, db_b_conn, warehouse_param, args.start_date, args.end_date, logger)
+        compare_order_detail_counts(db_a_conn, db_b_conn, warehouse_param, args.start_date, args.end_date, logger)
+        find_missing_orders(db_a_conn, db_b_conn, warehouse_param, args.start_date, args.end_date, logger)
+        find_missing_order_details(db_a_conn, db_b_conn, warehouse_param, args.start_date, args.end_date, logger)
+        show_sample_data_comparison(db_a_conn, db_b_conn, warehouse_param, args.start_date, args.end_date, logger)
+        check_copy_queries(db_a_conn, warehouse_param, args.start_date, args.end_date, logger)
         
-        # Check sample data
-        check_sample_data(db_a_conn, db_b_conn, args.warehouse_id, start_date, end_date, logger)
-        
-        logger.info("=== Summary ===")
-        logger.info(f"Orders: A={orders_a}, B={orders_b}, Match={orders_a == orders_b}")
-        logger.info(f"Order Details: A={details_a}, B={details_b}, Match={details_a == details_b}")
-        
-        return 0
+        logger.info("=== DEBUG COMPLETED ===")
         
     except Exception as e:
         logger.error(f"Debug failed: {str(e)}")
-        return 1
-        
+        sys.exit(1)
     finally:
-        if db_a_conn:
+        if 'db_a_conn' in locals():
             db_a_conn.close()
-        if db_b_conn:
+            logger.info("Database A connection closed")
+        if 'db_b_conn' in locals():
             db_b_conn.close()
-        logger.info("Database connections closed")
+            logger.info("Database B connection closed")
 
 if __name__ == "__main__":
-    exit(main()) 
+    main() 
