@@ -132,7 +132,7 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
                 destination_phone, destination_email, client_id, cancel_reason,
                 rdo_integration_id, address_change, divisi, pre_status
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (faktur_id, faktur_date, customer_id) DO NOTHING
             """
             
