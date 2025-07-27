@@ -104,7 +104,7 @@ def get_outbound_data(db_conn, warehouse_id, start_date, end_date, logger):
             whs_user, dev_user, client_id, origin_id, origin_name, destination_id,
             destination_name, destination_address_1, divisi, order_value
         FROM outbound_documents 
-        WHERE warehouse_id = %s 
+        WHERE origin_id = %s 
         AND create_date BETWEEN %s AND %s
         ORDER BY create_date
         """
@@ -124,7 +124,7 @@ def get_outbound_data(db_conn, warehouse_id, start_date, end_date, logger):
             oi.group_description, oi.product_description, oi.outbound_document_id
         FROM outbound_items oi
         JOIN outbound_documents od ON oi.outbound_document_id = od.id
-        WHERE od.warehouse_id = %s 
+        WHERE od.origin_id = %s 
         AND od.create_date BETWEEN %s AND %s
         ORDER BY oi.outbound_document_id, oi.line_id
         """
@@ -143,7 +143,7 @@ def get_outbound_data(db_conn, warehouse_id, start_date, end_date, logger):
         FROM outbound_conversion oc
         JOIN outbound_items oi ON oc.outbound_item_id = oi.id
         JOIN outbound_documents od ON oi.outbound_document_id = od.id
-        WHERE od.warehouse_id = %s 
+        WHERE od.origin_id = %s 
         AND od.create_date BETWEEN %s AND %s
         ORDER BY oc.outbound_item_id
         """
