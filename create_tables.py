@@ -75,7 +75,7 @@ def create_order_main_table(conn):
     """Create order_main table with composite unique key"""
     create_table_sql = """
     CREATE TABLE IF NOT EXISTS order_main (
-        order_id SERIAL PRIMARY KEY,
+        order_id INTEGER PRIMARY KEY,
         faktur_id VARCHAR(255),
         faktur_date DATE,
         delivery_date DATE,

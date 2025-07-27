@@ -96,10 +96,10 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
         copied_count = 0
         
         while offset < total_records:
-            # Fetch batch from source
+                        # Fetch batch from source
             select_query = """
             SELECT 
-                faktur_id, faktur_date, delivery_date, do_number, status, skip_count,
+                order_id, faktur_id, faktur_date, delivery_date, do_number, status, skip_count,
                 created_date, created_by, updated_date, updated_by, notes, customer_id,
                 warehouse_id, delivery_type_id, order_integration_id, origin_name,
                 origin_address_1, origin_address_2, origin_city, origin_zipcode,
@@ -107,7 +107,7 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
                 destination_address_2, destination_city, destination_zip_code,
                 destination_phone, destination_email, client_id, cancel_reason,
                 rdo_integration_id, address_change, divisi, pre_status
-            FROM "order" 
+            FROM "order"
             WHERE faktur_date >= %s AND faktur_date <= %s AND warehouse_id = %s
             ORDER BY faktur_date
             LIMIT %s OFFSET %s
@@ -123,7 +123,7 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
             # Insert batch into target using composite key
             insert_query = """
             INSERT INTO order_main (
-                faktur_id, faktur_date, delivery_date, do_number, status, skip_count,
+                order_id, faktur_id, faktur_date, delivery_date, do_number, status, skip_count,
                 created_date, created_by, updated_date, updated_by, notes, customer_id,
                 warehouse_id, delivery_type_id, order_integration_id, origin_name,
                 origin_address_1, origin_address_2, origin_city, origin_zipcode,
@@ -131,9 +131,8 @@ def copy_order_data_composite(source_conn, target_conn, start_date, end_date, wa
                 destination_address_2, destination_city, destination_zip_code,
                 destination_phone, destination_email, client_id, cancel_reason,
                 rdo_integration_id, address_change, divisi, pre_status
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                     %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (faktur_id, faktur_date, customer_id) DO NOTHING
             """
             

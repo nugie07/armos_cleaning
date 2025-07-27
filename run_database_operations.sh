@@ -232,7 +232,6 @@ main() {
                 show_usage
                 exit 1
             fi
-            create_tables
             copy_orders "$2" "$3" "$4"
             success "Order copy completed successfully"
             ;;
