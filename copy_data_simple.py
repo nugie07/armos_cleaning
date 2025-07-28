@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple copy script using INSERT INTO ... SELECT * FROM to avoid column count issues
+Simple copy script using batch processing with exact column matching
 """
 
 import os
@@ -47,7 +47,7 @@ def get_db_connection(database='A'):
     return conn
 
 def copy_orders_simple(logger, start_date, end_date, warehouse_id):
-    """Copy orders using INSERT INTO ... SELECT * FROM"""
+    """Copy orders using batch processing with exact column matching"""
     logger.info("=== COPYING ORDERS (SIMPLE METHOD) ===")
     
     conn_a = get_db_connection('A')
@@ -72,54 +72,75 @@ def copy_orders_simple(logger, start_date, end_date, warehouse_id):
             logger.warning("No orders found for the specified criteria")
             return 0
         
-        # Use INSERT INTO ... SELECT * FROM for exact column matching
-        insert_query = """
-        INSERT INTO order_main 
-        SELECT * FROM "order" 
-        WHERE faktur_date >= %s AND faktur_date <= %s 
-        AND warehouse_id = %s
-        AND faktur_id IS NOT NULL AND customer_id IS NOT NULL
-        ON CONFLICT (order_id) DO UPDATE SET
-            faktur_id = EXCLUDED.faktur_id,
-            faktur_date = EXCLUDED.faktur_date,
-            delivery_date = EXCLUDED.delivery_date,
-            do_number = EXCLUDED.do_number,
-            status = EXCLUDED.status,
-            skip_count = EXCLUDED.skip_count,
-            created_date = EXCLUDED.created_date,
-            created_by = EXCLUDED.created_by,
-            updated_date = EXCLUDED.updated_date,
-            updated_by = EXCLUDED.updated_by,
-            notes = EXCLUDED.notes,
-            customer_id = EXCLUDED.customer_id,
-            warehouse_id = EXCLUDED.warehouse_id,
-            delivery_type_id = EXCLUDED.delivery_type_id,
-            order_integration_id = EXCLUDED.order_integration_id,
-            origin_name = EXCLUDED.origin_name,
-            origin_address_1 = EXCLUDED.origin_address_1,
-            origin_address_2 = EXCLUDED.origin_address_2,
-            origin_city = EXCLUDED.origin_city,
-            origin_zipcode = EXCLUDED.origin_zipcode,
-            origin_phone = EXCLUDED.origin_phone,
-            origin_email = EXCLUDED.origin_email,
-            destination_name = EXCLUDED.destination_name,
-            destination_address_1 = EXCLUDED.destination_address_1,
-            destination_address_2 = EXCLUDED.destination_address_2,
-            destination_city = EXCLUDED.destination_city,
-            destination_zip_code = EXCLUDED.destination_zip_code,
-            destination_phone = EXCLUDED.destination_phone,
-            destination_email = EXCLUDED.destination_email,
-            client_id = EXCLUDED.client_id,
-            cancel_reason = EXCLUDED.cancel_reason,
-            rdo_integration_id = EXCLUDED.rdo_integration_id,
-            address_change = EXCLUDED.address_change,
-            divisi = EXCLUDED.divisi,
-            pre_status = EXCLUDED.pre_status
-        """
+        # Copy orders in batches
+        batch_size = 1000
+        offset = 0
+        copied_count = 0
         
-        cursor_b.execute(insert_query, (start_date, end_date, warehouse_id))
-        copied_count = cursor_b.rowcount
-        conn_b.commit()
+        while offset < total_orders:
+            # Fetch batch from source
+            cursor_a.execute("""
+                SELECT * FROM "order" 
+                WHERE faktur_date >= %s AND faktur_date <= %s 
+                AND warehouse_id = %s
+                AND faktur_id IS NOT NULL AND customer_id IS NOT NULL
+                ORDER BY faktur_date
+                LIMIT %s OFFSET %s
+            """, (start_date, end_date, warehouse_id, batch_size, offset))
+            
+            batch_data = cursor_a.fetchall()
+            if not batch_data:
+                break
+            
+            # Insert batch into target
+            insert_query = """
+            INSERT INTO order_main 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (order_id) DO UPDATE SET
+                faktur_id = EXCLUDED.faktur_id,
+                faktur_date = EXCLUDED.faktur_date,
+                delivery_date = EXCLUDED.delivery_date,
+                do_number = EXCLUDED.do_number,
+                status = EXCLUDED.status,
+                skip_count = EXCLUDED.skip_count,
+                created_date = EXCLUDED.created_date,
+                created_by = EXCLUDED.created_by,
+                updated_date = EXCLUDED.updated_date,
+                updated_by = EXCLUDED.updated_by,
+                notes = EXCLUDED.notes,
+                customer_id = EXCLUDED.customer_id,
+                warehouse_id = EXCLUDED.warehouse_id,
+                delivery_type_id = EXCLUDED.delivery_type_id,
+                order_integration_id = EXCLUDED.order_integration_id,
+                origin_name = EXCLUDED.origin_name,
+                origin_address_1 = EXCLUDED.origin_address_1,
+                origin_address_2 = EXCLUDED.origin_address_2,
+                origin_city = EXCLUDED.origin_city,
+                origin_zipcode = EXCLUDED.origin_zipcode,
+                origin_phone = EXCLUDED.origin_phone,
+                origin_email = EXCLUDED.origin_email,
+                destination_name = EXCLUDED.destination_name,
+                destination_address_1 = EXCLUDED.destination_address_1,
+                destination_address_2 = EXCLUDED.destination_address_2,
+                destination_city = EXCLUDED.destination_city,
+                destination_zip_code = EXCLUDED.destination_zip_code,
+                destination_phone = EXCLUDED.destination_phone,
+                destination_email = EXCLUDED.destination_email,
+                client_id = EXCLUDED.client_id,
+                cancel_reason = EXCLUDED.cancel_reason,
+                rdo_integration_id = EXCLUDED.rdo_integration_id,
+                address_change = EXCLUDED.address_change,
+                divisi = EXCLUDED.divisi,
+                pre_status = EXCLUDED.pre_status
+            """
+            
+            cursor_b.executemany(insert_query, batch_data)
+            conn_b.commit()
+            
+            copied_count += len(batch_data)
+            logger.info(f"Copied {len(batch_data)} orders (Total: {copied_count}/{total_orders})")
+            
+            offset += batch_size
         
         logger.info(f"✅ Order copy completed. Total copied: {copied_count}")
         return copied_count
@@ -133,7 +154,7 @@ def copy_orders_simple(logger, start_date, end_date, warehouse_id):
         conn_b.close()
 
 def copy_order_details_simple(logger, start_date, end_date, warehouse_id):
-    """Copy order details using INSERT INTO ... SELECT * FROM"""
+    """Copy order details using batch processing"""
     logger.info("=== COPYING ORDER DETAILS (SIMPLE METHOD) ===")
     
     conn_a = get_db_connection('A')
@@ -159,49 +180,69 @@ def copy_order_details_simple(logger, start_date, end_date, warehouse_id):
             logger.warning("No order details found for the specified criteria")
             return 0
         
-        # Use INSERT INTO ... SELECT * FROM for exact column matching
-        insert_query = """
-        INSERT INTO order_detail_main (
-            quantity_faktur, net_price, quantity_wms, quantity_delivery,
-            quantity_loading, quantity_unloading, status, cancel_reason,
-            notes, order_id, product_id, unit_id, pack_id, line_id,
-            unloading_latitude, unloading_longitude, origin_uom, origin_qty,
-            total_ctn, total_pcs
-        )
-        SELECT 
-            od.quantity_faktur, od.net_price, od.quantity_wms, od.quantity_delivery,
-            od.quantity_loading, od.quantity_unloading, od.status, od.cancel_reason,
-            od.notes, od.order_id, od.product_id, od.unit_id, od.pack_id, od.line_id,
-            od.unloading_latitude, od.unloading_longitude, od.origin_uom, od.origin_qty,
-            od.total_ctn, od.total_pcs
-        FROM order_detail od
-        JOIN "order" o ON od.order_id = o.order_id
-        WHERE o.faktur_date >= %s AND o.faktur_date <= %s 
-        AND o.warehouse_id = %s
-        AND o.faktur_id IS NOT NULL AND o.customer_id IS NOT NULL
-        ON CONFLICT (order_id, product_id, line_id) DO UPDATE SET
-            quantity_faktur = EXCLUDED.quantity_faktur,
-            net_price = EXCLUDED.net_price,
-            quantity_wms = EXCLUDED.quantity_wms,
-            quantity_delivery = EXCLUDED.quantity_delivery,
-            quantity_loading = EXCLUDED.quantity_loading,
-            quantity_unloading = EXCLUDED.quantity_unloading,
-            status = EXCLUDED.status,
-            cancel_reason = EXCLUDED.cancel_reason,
-            notes = EXCLUDED.notes,
-            unit_id = EXCLUDED.unit_id,
-            pack_id = EXCLUDED.pack_id,
-            unloading_latitude = EXCLUDED.unloading_latitude,
-            unloading_longitude = EXCLUDED.unloading_longitude,
-            origin_uom = EXCLUDED.origin_uom,
-            origin_qty = EXCLUDED.origin_qty,
-            total_ctn = EXCLUDED.total_ctn,
-            total_pcs = EXCLUDED.total_pcs
-        """
+        # Copy order details in batches
+        batch_size = 1000
+        offset = 0
+        copied_count = 0
         
-        cursor_b.execute(insert_query, (start_date, end_date, warehouse_id))
-        copied_count = cursor_b.rowcount
-        conn_b.commit()
+        while offset < total_details:
+            # Fetch batch from source
+            cursor_a.execute("""
+                SELECT 
+                    od.quantity_faktur, od.net_price, od.quantity_wms, od.quantity_delivery,
+                    od.quantity_loading, od.quantity_unloading, od.status, od.cancel_reason,
+                    od.notes, od.order_id, od.product_id, od.unit_id, od.pack_id, od.line_id,
+                    od.unloading_latitude, od.unloading_longitude, od.origin_uom, od.origin_qty,
+                    od.total_ctn, od.total_pcs
+                FROM order_detail od
+                JOIN "order" o ON od.order_id = o.order_id
+                WHERE o.faktur_date >= %s AND o.faktur_date <= %s 
+                AND o.warehouse_id = %s
+                AND o.faktur_id IS NOT NULL AND o.customer_id IS NOT NULL
+                ORDER BY o.faktur_date
+                LIMIT %s OFFSET %s
+            """, (start_date, end_date, warehouse_id, batch_size, offset))
+            
+            batch_data = cursor_a.fetchall()
+            if not batch_data:
+                break
+            
+            # Insert batch into target
+            insert_query = """
+            INSERT INTO order_detail_main (
+                quantity_faktur, net_price, quantity_wms, quantity_delivery,
+                quantity_loading, quantity_unloading, status, cancel_reason,
+                notes, order_id, product_id, unit_id, pack_id, line_id,
+                unloading_latitude, unloading_longitude, origin_uom, origin_qty,
+                total_ctn, total_pcs
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (order_id, product_id, line_id) DO UPDATE SET
+                quantity_faktur = EXCLUDED.quantity_faktur,
+                net_price = EXCLUDED.net_price,
+                quantity_wms = EXCLUDED.quantity_wms,
+                quantity_delivery = EXCLUDED.quantity_delivery,
+                quantity_loading = EXCLUDED.quantity_loading,
+                quantity_unloading = EXCLUDED.quantity_unloading,
+                status = EXCLUDED.status,
+                cancel_reason = EXCLUDED.cancel_reason,
+                notes = EXCLUDED.notes,
+                unit_id = EXCLUDED.unit_id,
+                pack_id = EXCLUDED.pack_id,
+                unloading_latitude = EXCLUDED.unloading_latitude,
+                unloading_longitude = EXCLUDED.unloading_longitude,
+                origin_uom = EXCLUDED.origin_uom,
+                origin_qty = EXCLUDED.origin_qty,
+                total_ctn = EXCLUDED.total_ctn,
+                total_pcs = EXCLUDED.total_pcs
+            """
+            
+            cursor_b.executemany(insert_query, batch_data)
+            conn_b.commit()
+            
+            copied_count += len(batch_data)
+            logger.info(f"Copied {len(batch_data)} order details (Total: {copied_count}/{total_details})")
+            
+            offset += batch_size
         
         logger.info(f"✅ Order detail copy completed. Total copied: {copied_count}")
         return copied_count
