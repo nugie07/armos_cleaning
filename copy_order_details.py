@@ -66,7 +66,7 @@ def get_outbound_data(logger, start_date, end_date, warehouse_id):
         cursor_b = conn_b.cursor()
         
         # Query to get outbound data based on document_reference
-        # All tables are in Database B
+        # Use order_main table in Database B
         query = """
         SELECT 
             oi.id as outbound_item_id,
@@ -77,16 +77,16 @@ def get_outbound_data(logger, start_date, end_date, warehouse_id):
             oi.line_id,
             odoc.id as outbound_document_id,
             odoc.document_reference,
-            o.order_id,
-            o.do_number,
-            o.faktur_date,
-            o.warehouse_id
+            om.order_id,
+            om.do_number,
+            om.faktur_date,
+            om.warehouse_id
         FROM outbound_items oi
         LEFT JOIN outbound_documents odoc ON odoc.id = oi.outbound_document_id
-        LEFT JOIN "order" o ON o.do_number = odoc.document_reference
-        WHERE o.faktur_date BETWEEN %s AND %s
-        AND o.warehouse_id = %s
-        ORDER BY o.faktur_date, oi.id
+        LEFT JOIN order_main om ON om.do_number = odoc.document_reference
+        WHERE om.faktur_date BETWEEN %s AND %s
+        AND om.warehouse_id = %s
+        ORDER BY om.faktur_date, oi.id
         """
         
         cursor_b.execute(query, (start_date, end_date, warehouse_id))
