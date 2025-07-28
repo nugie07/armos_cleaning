@@ -56,6 +56,51 @@ def get_db_connection(database='B'):
         )
     return conn
 
+def get_product_id_from_sku(logger, sku, pack_id, warehouse_id):
+    """Get product_id from mst_product_main based on sku, pack_id, and warehouse_id"""
+    conn_b = get_db_connection('B')
+    
+    try:
+        cursor_b = conn_b.cursor()
+        
+        # Get product_id based on sku, pack_id, and warehouse_id combination
+        query = """
+        SELECT id 
+        FROM mst_product_main 
+        WHERE sku = %s AND pack_id = %s AND warehouse_id = %s
+        LIMIT 1
+        """
+        
+        cursor_b.execute(query, (sku, pack_id, warehouse_id))
+        result = cursor_b.fetchone()
+        
+        if result:
+            return result[0]
+        
+        # If not found with exact match, try with just sku and warehouse_id
+        query_fallback = """
+        SELECT id 
+        FROM mst_product_main 
+        WHERE sku = %s AND warehouse_id = %s
+        LIMIT 1
+        """
+        
+        cursor_b.execute(query_fallback, (sku, warehouse_id))
+        result_fallback = cursor_b.fetchone()
+        
+        if result_fallback:
+            logger.warning(f"Product found with sku={sku}, warehouse_id={warehouse_id} but pack_id={pack_id} not matched")
+            return result_fallback[0]
+        
+        logger.warning(f"No product found for sku={sku}, pack_id={pack_id}, warehouse_id={warehouse_id}")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error getting product_id for sku {sku}: {e}")
+        return None
+    finally:
+        conn_b.close()
+
 def get_outbound_data(logger, start_date, end_date, warehouse_id):
     """Get outbound data based on the specified query"""
     logger.info("=== GETTING OUTBOUND DATA ===")
@@ -70,7 +115,7 @@ def get_outbound_data(logger, start_date, end_date, warehouse_id):
         query = """
         SELECT 
             oi.id as outbound_item_id,
-            oi.product_id,
+            oi.product_id as sku,  -- This is actually SKU, not product_id
             oi.qty,
             oi.uom,
             oi.pack_id,
@@ -99,7 +144,7 @@ def get_outbound_data(logger, start_date, end_date, warehouse_id):
         for row in results:
             outbound_data.append({
                 'outbound_item_id': row[0],
-                'product_id': row[1],
+                'sku': row[1],  # This is SKU, not product_id
                 'qty': row[2],
                 'uom': row[3],
                 'pack_id': row[4],
@@ -120,7 +165,7 @@ def get_outbound_data(logger, start_date, end_date, warehouse_id):
     finally:
         conn_b.close()
 
-def get_product_net_price(logger, product_id, outbound_document_id):
+def get_product_net_price(logger, sku, outbound_document_id):
     """Get product net price from outbound_items"""
     conn_b = get_db_connection('B')  # Use Database B
     
@@ -134,18 +179,18 @@ def get_product_net_price(logger, product_id, outbound_document_id):
         LIMIT 1
         """
         
-        cursor_b.execute(query, (product_id, outbound_document_id))
+        cursor_b.execute(query, (sku, outbound_document_id))
         result = cursor_b.fetchone()
         
         return result[0] if result else None
         
     except Exception as e:
-        logger.error(f"Error getting product net price for product_id {product_id}: {e}")
+        logger.error(f"Error getting product net price for sku {sku}: {e}")
         return None
     finally:
         conn_b.close()
 
-def get_conversion_data(logger, product_id, outbound_document_id):
+def get_conversion_data(logger, sku, outbound_document_id):
     """Get conversion data from outbound_conversions"""
     conn_b = get_db_connection('B')  # Use Database B
     
@@ -161,7 +206,7 @@ def get_conversion_data(logger, product_id, outbound_document_id):
         LIMIT 1
         """
         
-        cursor_b.execute(query, (product_id, outbound_document_id))
+        cursor_b.execute(query, (sku, outbound_document_id))
         result = cursor_b.fetchone()
         
         if result:
@@ -169,7 +214,7 @@ def get_conversion_data(logger, product_id, outbound_document_id):
         return None
         
     except Exception as e:
-        logger.error(f"Error getting conversion data for product_id {product_id}: {e}")
+        logger.error(f"Error getting conversion data for sku {sku}: {e}")
         return None
     finally:
         conn_b.close()
@@ -321,13 +366,20 @@ def copy_order_details(logger, start_date, end_date, warehouse_id):
     
     for i, item in enumerate(outbound_data):
         try:
-            logger.debug(f"Processing item {i+1}/{len(outbound_data)}: order_id {item['order_id']}, product_id {item['product_id']}")
+            logger.debug(f"Processing item {i+1}/{len(outbound_data)}: order_id {item['order_id']}, sku {item['sku']}")
+            
+            # Get correct product_id from mst_product_main based on sku, pack_id, and warehouse_id
+            product_id = get_product_id_from_sku(logger, item['sku'], item['pack_id'], warehouse_id)
+            
+            if not product_id:
+                logger.warning(f"Skipping item {i+1}: No product_id found for sku={item['sku']}, pack_id={item['pack_id']}, warehouse_id={warehouse_id}")
+                continue
             
             # Get product net price
-            net_price = get_product_net_price(logger, item['product_id'], item['outbound_document_id'])
+            net_price = get_product_net_price(logger, item['sku'], item['outbound_document_id'])
             
             # Get conversion data
-            conversion_data = get_conversion_data(logger, item['product_id'], item['outbound_document_id'])
+            conversion_data = get_conversion_data(logger, item['sku'], item['outbound_document_id'])
             
             # Calculate quantities based on UOM and conversion rules
             quantity_faktur, total_pcs, total_ctn = calculate_quantities(
@@ -337,7 +389,7 @@ def copy_order_details(logger, start_date, end_date, warehouse_id):
             # Prepare order detail data
             order_detail = {
                 'order_id': item['order_id'],
-                'product_id': item['product_id'],
+                'product_id': product_id,  # Use the correct product_id from mst_product_main
                 'quantity_faktur': quantity_faktur,
                 'net_price': net_price,
                 'pack_id': item['pack_id'],
