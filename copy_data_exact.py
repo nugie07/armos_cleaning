@@ -78,18 +78,9 @@ def copy_orders_exact(logger, start_date, end_date, warehouse_id):
         copied_count = 0
         
         while offset < total_orders:
-            # Fetch batch from source
+            # Fetch batch from source - all 36 columns using SELECT *
             cursor_a.execute("""
-                SELECT 
-                    order_id, faktur_id, faktur_date, delivery_date, do_number, status, skip_count,
-                    created_date, created_by, updated_date, updated_by, notes, customer_id,
-                    warehouse_id, delivery_type_id, order_integration_id, origin_name,
-                    origin_address_1, origin_address_2, origin_city, origin_zipcode,
-                    origin_phone, origin_email, destination_name, destination_address_1,
-                    destination_address_2, destination_city, destination_zip_code,
-                    destination_phone, destination_email, client_id, cancel_reason,
-                    rdo_integration_id, address_change, divisi, pre_status
-                FROM "order"
+                SELECT * FROM "order"
                 WHERE faktur_date >= %s AND faktur_date <= %s 
                 AND warehouse_id = %s
                 AND faktur_id IS NOT NULL AND customer_id IS NOT NULL
