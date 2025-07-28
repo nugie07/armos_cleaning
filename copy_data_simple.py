@@ -207,7 +207,7 @@ def copy_order_details_simple(logger, start_date, end_date, warehouse_id):
             if not batch_data:
                 break
             
-            # Insert batch into target
+            # Insert batch into target - using simple INSERT without ON CONFLICT
             insert_query = """
             INSERT INTO order_detail_main (
                 quantity_faktur, net_price, quantity_wms, quantity_delivery,
