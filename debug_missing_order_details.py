@@ -28,180 +28,169 @@ def get_db_connection(database='B'):
             port=os.getenv('DB_B_PORT')
         )
 
-def debug_specific_do_number(logger, do_number):
-    """Debug specific DO number to see why it's not being processed"""
+def debug_multiple_do_numbers(logger, do_numbers):
+    """Debug multiple DO numbers to see why they're not being processed"""
     conn_b = get_db_connection('B')
     
     try:
         cursor_b = conn_b.cursor()
         
-        logger.info(f"=== DEBUGGING DO NUMBER: {do_number} ===")
+        logger.info(f"=== DEBUGGING {len(do_numbers)} DO NUMBERS ===")
         
         # Step 1: Check outbound_documents
         logger.info("1. Checking outbound_documents...")
-        query1 = """
+        placeholders = ','.join(['%s'] * len(do_numbers))
+        query1 = f"""
         SELECT id, document_reference, create_date 
         FROM outbound_documents 
-        WHERE document_reference = %s
+        WHERE document_reference IN ({placeholders})
         """
-        cursor_b.execute(query1, (do_number,))
-        doc_result = cursor_b.fetchone()
+        cursor_b.execute(query1, do_numbers)
+        doc_results = cursor_b.fetchall()
         
-        if doc_result:
-            logger.info(f"   ✓ Found in outbound_documents: id={doc_result[0]}, created_date={doc_result[2]}")
-            doc_id = doc_result[0]
-        else:
-            logger.error(f"   ✗ NOT FOUND in outbound_documents")
+        logger.info(f"   ✓ Found {len(doc_results)} documents in outbound_documents")
+        
+        if not doc_results:
+            logger.error(f"   ✗ NO DOCUMENTS found in outbound_documents")
             return
+        
+        # Get document IDs
+        doc_ids = [row[0] for row in doc_results]
+        found_do_numbers = [row[1] for row in doc_results]
         
         # Step 2: Check outbound_items
         logger.info("2. Checking outbound_items...")
-        query2 = """
-        SELECT COUNT(*) as item_count, 
-               MIN(product_id) as sample_product_id,
-               MIN(pack_id) as sample_pack_id
+        placeholders = ','.join(['%s'] * len(doc_ids))
+        query2 = f"""
+        SELECT outbound_document_id, COUNT(*) as item_count
         FROM outbound_items 
-        WHERE outbound_document_id = %s
+        WHERE outbound_document_id IN ({placeholders})
+        GROUP BY outbound_document_id
         """
-        cursor_b.execute(query2, (doc_id,))
-        item_result = cursor_b.fetchone()
+        cursor_b.execute(query2, doc_ids)
+        item_results = cursor_b.fetchall()
         
-        if item_result and item_result[0] > 0:
-            logger.info(f"   ✓ Found {item_result[0]} items in outbound_items")
-            logger.info(f"   ✓ Sample product_id: {item_result[1]}, pack_id: {item_result[2]}")
-        else:
-            logger.error(f"   ✗ NO ITEMS found in outbound_items")
-            return
+        total_items = sum(row[1] for row in item_results)
+        logger.info(f"   ✓ Found {total_items} total items in outbound_items")
+        logger.info(f"   ✓ Items per document: {dict(item_results)}")
         
         # Step 3: Check order_main
         logger.info("3. Checking order_main...")
-        query3 = """
-        SELECT order_id, faktur_date, warehouse_id, do_number
+        placeholders = ','.join(['%s'] * len(found_do_numbers))
+        query3 = f"""
+        SELECT do_number, order_id, faktur_date, warehouse_id
         FROM order_main 
-        WHERE do_number = %s
+        WHERE do_number IN ({placeholders})
         """
-        cursor_b.execute(query3, (do_number,))
-        order_result = cursor_b.fetchone()
+        cursor_b.execute(query3, found_do_numbers)
+        order_results = cursor_b.fetchall()
         
-        if order_result:
-            logger.info(f"   ✓ Found in order_main: order_id={order_result[0]}, faktur_date={order_result[1]}, warehouse_id={order_result[2]}")
-            order_id = order_result[0]
-            faktur_date = order_result[1]
-            warehouse_id = order_result[2]
-        else:
-            logger.error(f"   ✗ NOT FOUND in order_main")
-            return
+        logger.info(f"   ✓ Found {len(order_results)} orders in order_main")
         
-        # Step 4: Check mst_product_main for sample product
-        logger.info("4. Checking mst_product_main...")
-        query4 = """
-        SELECT COUNT(*) as product_count
-        FROM mst_product_main 
-        WHERE sku = %s AND pack_id = %s AND warehouse_id = %s
-        """
-        cursor_b.execute(query4, (item_result[1], item_result[2], str(warehouse_id)))
-        product_result = cursor_b.fetchone()
-        
-        if product_result and product_result[0] > 0:
-            logger.info(f"   ✓ Found {product_result[0]} matching products in mst_product_main")
-        else:
-            logger.warning(f"   ⚠ NO MATCHING PRODUCTS in mst_product_main")
-            logger.info(f"   Trying fallback lookup...")
+        if order_results:
+            # Show sample orders
+            for i, order in enumerate(order_results[:5]):  # Show first 5
+                logger.info(f"   Sample {i+1}: do_number={order[0]}, order_id={order[1]}, faktur_date={order[2]}, warehouse_id={order[3]}")
             
-            # Fallback lookup
-            query4b = """
-            SELECT COUNT(*) as product_count
-            FROM mst_product_main 
-            WHERE sku = %s AND warehouse_id = %s
+            if len(order_results) > 5:
+                logger.info(f"   ... and {len(order_results) - 5} more orders")
+        
+        # Step 4: Check order_detail_main
+        logger.info("4. Checking order_detail_main...")
+        if order_results:
+            order_ids = [row[1] for row in order_results]
+            placeholders = ','.join(['%s'] * len(order_ids))
+            query4 = f"""
+            SELECT order_id, COUNT(*) as detail_count
+            FROM order_detail_main 
+            WHERE order_id IN ({placeholders})
+            GROUP BY order_id
             """
-            cursor_b.execute(query4b, (item_result[1], str(warehouse_id)))
-            product_fallback = cursor_b.fetchone()
+            cursor_b.execute(query4, order_ids)
+            detail_results = cursor_b.fetchall()
             
-            if product_fallback and product_fallback[0] > 0:
-                logger.info(f"   ✓ Found {product_fallback[0]} products with fallback lookup")
-            else:
-                logger.error(f"   ✗ NO PRODUCTS found even with fallback")
+            orders_with_details = len(detail_results)
+            orders_without_details = len(order_ids) - orders_with_details
+            
+            logger.info(f"   ✓ Orders with details: {orders_with_details}")
+            logger.info(f"   ⚠ Orders without details: {orders_without_details}")
+            
+            if detail_results:
+                total_details = sum(row[1] for row in detail_results)
+                logger.info(f"   ✓ Total detail records: {total_details}")
         
-        # Step 5: Check if already exists in order_detail_main
-        logger.info("5. Checking order_detail_main...")
-        query5 = """
-        SELECT COUNT(*) as detail_count
-        FROM order_detail_main 
-        WHERE order_id = %s
-        """
-        cursor_b.execute(query5, (order_id,))
-        detail_result = cursor_b.fetchone()
-        
-        if detail_result and detail_result[0] > 0:
-            logger.info(f"   ✓ Already has {detail_result[0]} records in order_detail_main")
-        else:
-            logger.info(f"   ⚠ NO RECORDS in order_detail_main for this order_id")
-        
-        # Step 6: Test the full JOIN query
-        logger.info("6. Testing full JOIN query...")
-        query6 = """
+        # Step 5: Test the full JOIN query
+        logger.info("5. Testing full JOIN query...")
+        placeholders = ','.join(['%s'] * len(found_do_numbers))
+        query5 = f"""
         SELECT 
-            oi.id,
-            oi.product_id as sku,
-            oi.qty,
-            oi.uom,
-            oi.pack_id,
-            oi.line_id,
-            oi.outbound_document_id,
             odoc.document_reference,
             om.order_id,
-            om.do_number,
             om.faktur_date,
             om.warehouse_id,
-            mp.mst_product_id,
-            oi.product_net_price,
-            oc.numerator,
-            oc.denominator
-        FROM outbound_items oi
-        LEFT JOIN outbound_documents odoc ON odoc.id = oi.outbound_document_id
+            COUNT(oi.id) as item_count,
+            COUNT(mp.mst_product_id) as product_matches
+        FROM outbound_documents odoc
+        LEFT JOIN outbound_items oi ON odoc.id = oi.outbound_document_id
         LEFT JOIN order_main om ON om.do_number = odoc.document_reference
         LEFT JOIN mst_product_main mp ON (
             mp.sku = oi.product_id 
             AND mp.pack_id = oi.pack_id 
-            AND mp.warehouse_id = %s
+            AND mp.warehouse_id = om.warehouse_id
         )
-        LEFT JOIN outbound_conversions oc ON oi.id = oc.outbound_item_id
-        WHERE odoc.document_reference = %s
+        WHERE odoc.document_reference IN ({placeholders})
+        GROUP BY odoc.document_reference, om.order_id, om.faktur_date, om.warehouse_id
+        ORDER BY odoc.document_reference
         """
         
-        cursor_b.execute(query6, (str(warehouse_id), do_number))
+        cursor_b.execute(query5, found_do_numbers)
         join_results = cursor_b.fetchall()
         
         logger.info(f"   ✓ JOIN query returned {len(join_results)} records")
         
         if join_results:
-            # Show sample record
-            sample = join_results[0]
-            logger.info(f"   Sample record:")
-            logger.info(f"     - product_id: {sample[1]}")
-            logger.info(f"     - mst_product_id: {sample[12]}")
-            logger.info(f"     - order_id: {sample[8]}")
-            logger.info(f"     - warehouse_id: {sample[11]}")
+            # Show sample records
+            logger.info(f"   Sample JOIN results:")
+            for i, result in enumerate(join_results[:10]):  # Show first 10
+                logger.info(f"     {i+1}. DO: {result[0]}, Order: {result[1]}, Date: {result[2]}, Items: {result[4]}, Products: {result[5]}")
+            
+            if len(join_results) > 10:
+                logger.info(f"     ... and {len(join_results) - 10} more records")
+        
+        # Step 6: Summary
+        logger.info("6. Summary Analysis...")
+        missing_do_numbers = set(do_numbers) - set(found_do_numbers)
+        if missing_do_numbers:
+            logger.warning(f"   ⚠ DO numbers NOT found in outbound_documents: {len(missing_do_numbers)}")
+            logger.warning(f"   Missing: {list(missing_do_numbers)[:5]}...")  # Show first 5
         
         logger.info("=== DEBUG COMPLETE ===")
         
     except Exception as e:
-        logger.error(f"Error debugging DO number {do_number}: {e}")
+        logger.error(f"Error debugging DO numbers: {e}")
     finally:
         conn_b.close()
 
+def debug_specific_do_number(logger, do_number):
+    """Debug specific DO number to see why it's not being processed"""
+    debug_multiple_do_numbers(logger, [do_number])
+
 def main():
     """Main function"""
-    if len(sys.argv) != 2:
-        print("Usage: python3 debug_missing_order_details.py <do_number>")
+    if len(sys.argv) < 2:
+        print("Usage: python3 debug_missing_order_details.py <do_number1> [do_number2] ...")
         print("Example: python3 debug_missing_order_details.py B10SI2501-2722")
+        print("Example: python3 debug_missing_order_details.py B10SI2502-0936 B10SI2502-1063")
         sys.exit(1)
     
-    do_number = sys.argv[1]
+    do_numbers = sys.argv[1:]
     logger = setup_logging()
     
     try:
-        debug_specific_do_number(logger, do_number)
+        if len(do_numbers) == 1:
+            debug_specific_do_number(logger, do_numbers[0])
+        else:
+            debug_multiple_do_numbers(logger, do_numbers)
     except Exception as e:
         logger.error(f"Debug process failed: {e}")
 
