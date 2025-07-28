@@ -67,41 +67,68 @@ def fix_invalid_dates(logger, warehouse_id):
         faktur_fixed = cursor.rowcount
         logger.info(f"Fixed {faktur_fixed} invalid faktur_date records")
         
-        # Fix invalid delivery_date (set to NULL if invalid)
+        # Fix invalid delivery_date using safer approach
         logger.info("Fixing invalid delivery_date...")
-        cursor.execute("""
-            UPDATE "order"
-            SET delivery_date = NULL
-            WHERE warehouse_id = %s
-            AND (delivery_date < '1900-01-01' OR delivery_date > '2100-12-31')
-        """, (warehouse_id,))
-        
-        delivery_fixed = cursor.rowcount
-        logger.info(f"Fixed {delivery_fixed} invalid delivery_date records")
+        try:
+            cursor.execute("""
+                UPDATE "order"
+                SET delivery_date = NULL
+                WHERE warehouse_id = %s
+                AND (delivery_date < '1900-01-01' OR delivery_date > '2100-12-31')
+            """, (warehouse_id,))
+            
+            delivery_fixed = cursor.rowcount
+            logger.info(f"Fixed {delivery_fixed} invalid delivery_date records")
+            
+        except Exception as e:
+            logger.warning(f"Error with standard delivery_date fix: {e}")
+            logger.info("Trying alternative approach for delivery_date...")
+            
+            # Alternative approach: fix specific problematic patterns
+            cursor.execute("""
+                UPDATE "order"
+                SET delivery_date = NULL
+                WHERE warehouse_id = %s
+                AND delivery_date IS NOT NULL
+                AND delivery_date::text LIKE '%252025%'
+            """, (warehouse_id,))
+            
+            delivery_fixed = cursor.rowcount
+            logger.info(f"Fixed {delivery_fixed} delivery_date records with year 252025")
         
         # Fix invalid created_date (set to current date if invalid)
         logger.info("Fixing invalid created_date...")
-        cursor.execute("""
-            UPDATE "order"
-            SET created_date = CURRENT_DATE
-            WHERE warehouse_id = %s
-            AND (created_date < '1900-01-01' OR created_date > '2100-12-31')
-        """, (warehouse_id,))
-        
-        created_fixed = cursor.rowcount
-        logger.info(f"Fixed {created_fixed} invalid created_date records")
+        try:
+            cursor.execute("""
+                UPDATE "order"
+                SET created_date = CURRENT_DATE
+                WHERE warehouse_id = %s
+                AND (created_date < '1900-01-01' OR created_date > '2100-12-31')
+            """, (warehouse_id,))
+            
+            created_fixed = cursor.rowcount
+            logger.info(f"Fixed {created_fixed} invalid created_date records")
+            
+        except Exception as e:
+            logger.warning(f"Error with created_date fix: {e}")
+            created_fixed = 0
         
         # Fix invalid updated_date (set to current date if invalid)
         logger.info("Fixing invalid updated_date...")
-        cursor.execute("""
-            UPDATE "order"
-            SET updated_date = CURRENT_DATE
-            WHERE warehouse_id = %s
-            AND (updated_date < '1900-01-01' OR updated_date > '2100-12-31')
-        """, (warehouse_id,))
-        
-        updated_fixed = cursor.rowcount
-        logger.info(f"Fixed {updated_fixed} invalid updated_date records")
+        try:
+            cursor.execute("""
+                UPDATE "order"
+                SET updated_date = CURRENT_DATE
+                WHERE warehouse_id = %s
+                AND (updated_date < '1900-01-01' OR updated_date > '2100-12-31')
+            """, (warehouse_id,))
+            
+            updated_fixed = cursor.rowcount
+            logger.info(f"Fixed {updated_fixed} invalid updated_date records")
+            
+        except Exception as e:
+            logger.warning(f"Error with updated_date fix: {e}")
+            updated_fixed = 0
         
         conn_a.commit()
         

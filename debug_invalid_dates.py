@@ -75,65 +75,112 @@ def check_invalid_dates(logger, start_date, end_date, warehouse_id):
         else:
             logger.info("No invalid faktur_date found")
         
-        # Check for invalid delivery_date
+        # Check for invalid delivery_date using safer approach
         logger.info("Checking delivery_date for invalid values...")
-        cursor.execute("""
-            SELECT order_id, delivery_date, faktur_id, customer_id, warehouse_id
-            FROM "order"
-            WHERE warehouse_id = %s
-            AND (delivery_date IS NOT NULL AND (delivery_date < '1900-01-01' OR delivery_date > '2100-12-31'))
-            ORDER BY order_id
-            LIMIT 20
-        """, (warehouse_id,))
-        
-        invalid_delivery_dates = cursor.fetchall()
-        
-        if invalid_delivery_dates:
-            logger.warning(f"Found {len(invalid_delivery_dates)} orders with invalid delivery_date:")
-            for row in invalid_delivery_dates:
-                logger.warning(f"  Order ID: {row[0]}, delivery_date: {row[1]}, faktur_id: {row[2]}, customer_id: {row[3]}")
-        else:
-            logger.info("No invalid delivery_date found")
+        try:
+            cursor.execute("""
+                SELECT order_id, delivery_date, faktur_id, customer_id, warehouse_id
+                FROM "order"
+                WHERE warehouse_id = %s
+                AND delivery_date IS NOT NULL
+                ORDER BY order_id
+                LIMIT 100
+            """, (warehouse_id,))
+            
+            delivery_dates = cursor.fetchall()
+            invalid_delivery_dates = []
+            
+            for row in delivery_dates:
+                try:
+                    delivery_date = row[1]
+                    if delivery_date:
+                        # Try to convert to string to check for invalid years
+                        date_str = str(delivery_date)
+                        if '252025' in date_str or '252024' in date_str or '252023' in date_str:
+                            invalid_delivery_dates.append(row)
+                        elif delivery_date.year < 1900 or delivery_date.year > 2100:
+                            invalid_delivery_dates.append(row)
+                except Exception as e:
+                    logger.warning(f"Error processing delivery_date for order {row[0]}: {e}")
+                    invalid_delivery_dates.append(row)
+            
+            if invalid_delivery_dates:
+                logger.warning(f"Found {len(invalid_delivery_dates)} orders with invalid delivery_date:")
+                for row in invalid_delivery_dates[:20]:  # Show first 20
+                    logger.warning(f"  Order ID: {row[0]}, delivery_date: {row[1]}, faktur_id: {row[2]}, customer_id: {row[3]}")
+            else:
+                logger.info("No invalid delivery_date found")
+                
+        except Exception as e:
+            logger.error(f"Error checking delivery_date: {e}")
+            logger.info("Will try alternative approach...")
+            
+            # Alternative approach: check for specific problematic patterns
+            cursor.execute("""
+                SELECT order_id, delivery_date, faktur_id, customer_id, warehouse_id
+                FROM "order"
+                WHERE warehouse_id = %s
+                AND delivery_date IS NOT NULL
+                AND delivery_date::text LIKE '%252025%'
+                ORDER BY order_id
+                LIMIT 20
+            """, (warehouse_id,))
+            
+            invalid_delivery_dates = cursor.fetchall()
+            if invalid_delivery_dates:
+                logger.warning(f"Found {len(invalid_delivery_dates)} orders with year 252025 in delivery_date:")
+                for row in invalid_delivery_dates:
+                    logger.warning(f"  Order ID: {row[0]}, delivery_date: {row[1]}, faktur_id: {row[2]}, customer_id: {row[3]}")
+            else:
+                logger.info("No delivery_date with year 252025 found")
         
         # Check for invalid created_date
         logger.info("Checking created_date for invalid values...")
-        cursor.execute("""
-            SELECT order_id, created_date, faktur_id, customer_id, warehouse_id
-            FROM "order"
-            WHERE warehouse_id = %s
-            AND (created_date IS NOT NULL AND (created_date < '1900-01-01' OR created_date > '2100-12-31'))
-            ORDER BY order_id
-            LIMIT 20
-        """, (warehouse_id,))
-        
-        invalid_created_dates = cursor.fetchall()
-        
-        if invalid_created_dates:
-            logger.warning(f"Found {len(invalid_created_dates)} orders with invalid created_date:")
-            for row in invalid_created_dates:
-                logger.warning(f"  Order ID: {row[0]}, created_date: {row[1]}, faktur_id: {row[2]}, customer_id: {row[3]}")
-        else:
-            logger.info("No invalid created_date found")
+        try:
+            cursor.execute("""
+                SELECT order_id, created_date, faktur_id, customer_id, warehouse_id
+                FROM "order"
+                WHERE warehouse_id = %s
+                AND created_date IS NOT NULL
+                AND (created_date < '1900-01-01' OR created_date > '2100-12-31')
+                ORDER BY order_id
+                LIMIT 20
+            """, (warehouse_id,))
+            
+            invalid_created_dates = cursor.fetchall()
+            
+            if invalid_created_dates:
+                logger.warning(f"Found {len(invalid_created_dates)} orders with invalid created_date:")
+                for row in invalid_created_dates:
+                    logger.warning(f"  Order ID: {row[0]}, created_date: {row[1]}, faktur_id: {row[2]}, customer_id: {row[3]}")
+            else:
+                logger.info("No invalid created_date found")
+        except Exception as e:
+            logger.error(f"Error checking created_date: {e}")
         
         # Check for invalid updated_date
         logger.info("Checking updated_date for invalid values...")
-        cursor.execute("""
-            SELECT order_id, updated_date, faktur_id, customer_id, warehouse_id
-            FROM "order"
-            WHERE warehouse_id = %s
-            AND (updated_date IS NOT NULL AND (updated_date < '1900-01-01' OR updated_date > '2100-12-31'))
-            ORDER BY order_id
-            LIMIT 20
-        """, (warehouse_id,))
-        
-        invalid_updated_dates = cursor.fetchall()
-        
-        if invalid_updated_dates:
-            logger.warning(f"Found {len(invalid_updated_dates)} orders with invalid updated_date:")
-            for row in invalid_updated_dates:
-                logger.warning(f"  Order ID: {row[0]}, updated_date: {row[1]}, faktur_id: {row[2]}, customer_id: {row[3]}")
-        else:
-            logger.info("No invalid updated_date found")
+        try:
+            cursor.execute("""
+                SELECT order_id, updated_date, faktur_id, customer_id, warehouse_id
+                FROM "order"
+                WHERE warehouse_id = %s
+                AND updated_date IS NOT NULL
+                AND (updated_date < '1900-01-01' OR updated_date > '2100-12-31')
+                ORDER BY order_id
+                LIMIT 20
+            """, (warehouse_id,))
+            
+            invalid_updated_dates = cursor.fetchall()
+            
+            if invalid_updated_dates:
+                logger.warning(f"Found {len(invalid_updated_dates)} orders with invalid updated_date:")
+                for row in invalid_updated_dates:
+                    logger.warning(f"  Order ID: {row[0]}, updated_date: {row[1]}, faktur_id: {row[2]}, customer_id: {row[3]}")
+            else:
+                logger.info("No invalid updated_date found")
+        except Exception as e:
+            logger.error(f"Error checking updated_date: {e}")
         
         # Check for specific date range that might cause issues
         logger.info("Checking for orders in the specified date range...")
@@ -158,27 +205,14 @@ def check_invalid_dates(logger, start_date, end_date, warehouse_id):
         excluded_orders = cursor.fetchone()[0]
         logger.info(f"Orders excluded due to NULL faktur_id or customer_id: {excluded_orders}")
         
-        # Check for orders with invalid dates in the range
-        cursor.execute("""
-            SELECT COUNT(*) FROM "order"
-            WHERE warehouse_id = %s
-            AND (faktur_date < '1900-01-01' OR faktur_date > '2100-12-31'
-                 OR delivery_date < '1900-01-01' OR delivery_date > '2100-12-31'
-                 OR created_date < '1900-01-01' OR created_date > '2100-12-31'
-                 OR updated_date < '1900-01-01' OR updated_date > '2100-12-31')
-        """, (warehouse_id,))
-        
-        total_invalid = cursor.fetchone()[0]
-        logger.info(f"Total orders with invalid dates: {total_invalid}")
-        
         return {
             'invalid_faktur_dates': len(invalid_faktur_dates),
-            'invalid_delivery_dates': len(invalid_delivery_dates),
-            'invalid_created_dates': len(invalid_created_dates),
-            'invalid_updated_dates': len(invalid_updated_dates),
+            'invalid_delivery_dates': len(invalid_delivery_dates) if 'invalid_delivery_dates' in locals() else 0,
+            'invalid_created_dates': len(invalid_created_dates) if 'invalid_created_dates' in locals() else 0,
+            'invalid_updated_dates': len(invalid_updated_dates) if 'invalid_updated_dates' in locals() else 0,
             'valid_orders': valid_orders,
             'excluded_orders': excluded_orders,
-            'total_invalid': total_invalid
+            'total_invalid': len(invalid_faktur_dates) + (len(invalid_delivery_dates) if 'invalid_delivery_dates' in locals() else 0)
         }
         
     except Exception as e:
