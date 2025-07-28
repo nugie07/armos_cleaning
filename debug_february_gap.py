@@ -136,7 +136,7 @@ def debug_february_gap(logger, warehouse_id=4512):
             LEFT JOIN mst_product_main mp ON (
                 mp.sku = oi.product_id 
                 AND mp.pack_id = oi.pack_id 
-                AND mp.warehouse_id = om.warehouse_id
+                AND mp.warehouse_id = om.warehouse_id::varchar
             )
             WHERE odoc.document_reference IN ({placeholders})
             GROUP BY odoc.document_reference, om.order_id, om.faktur_date, om.warehouse_id
