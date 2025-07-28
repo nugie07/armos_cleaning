@@ -40,7 +40,7 @@ def debug_specific_do_number(logger, do_number):
         # Step 1: Check outbound_documents
         logger.info("1. Checking outbound_documents...")
         query1 = """
-        SELECT id, document_reference, created_date 
+        SELECT id, document_reference, create_date 
         FROM outbound_documents 
         WHERE document_reference = %s
         """
