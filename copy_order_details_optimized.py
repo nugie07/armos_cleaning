@@ -284,6 +284,25 @@ def copy_order_details_optimized(logger, start_date, end_date, warehouse_id):
     
     logger.info(f"Processing complete: {valid_count} valid items, {skipped_count} skipped items")
     
+    # Step 2.5: Deduplicate data to prevent UPSERT conflicts
+    logger.info("=== DEDUPLICATING DATA ===")
+    unique_order_details = []
+    seen_keys = set()
+    duplicate_count = 0
+    
+    for item in order_details_data:
+        key = (item['order_id'], item['product_id'], item['line_id'])
+        if key not in seen_keys:
+            seen_keys.add(key)
+            unique_order_details.append(item)
+        else:
+            duplicate_count += 1
+    
+    logger.info(f"Deduplication complete: {len(unique_order_details)} unique items, {duplicate_count} duplicates removed")
+    
+    # Replace with deduplicated data
+    order_details_data = unique_order_details
+    
     # Step 3: Batch insert data into order_detail_main
     logger.info("=== BATCH INSERTING TO DATABASE ===")
     inserted_count, final_skipped_count = insert_order_details_batch(logger, order_details_data)
