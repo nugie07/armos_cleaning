@@ -63,6 +63,9 @@ def get_product_id_from_sku(logger, sku, pack_id, warehouse_id):
     try:
         cursor_b = conn_b.cursor()
         
+        # Convert warehouse_id to string to match VARCHAR column type
+        warehouse_id_str = str(warehouse_id)
+        
         # Get product_id based on sku, pack_id, and warehouse_id combination
         query = """
         SELECT mst_product_id 
@@ -71,7 +74,7 @@ def get_product_id_from_sku(logger, sku, pack_id, warehouse_id):
         LIMIT 1
         """
         
-        cursor_b.execute(query, (sku, pack_id, warehouse_id))
+        cursor_b.execute(query, (sku, pack_id, warehouse_id_str))
         result = cursor_b.fetchone()
         
         if result:
@@ -85,14 +88,14 @@ def get_product_id_from_sku(logger, sku, pack_id, warehouse_id):
         LIMIT 1
         """
         
-        cursor_b.execute(query_fallback, (sku, warehouse_id))
+        cursor_b.execute(query_fallback, (sku, warehouse_id_str))
         result_fallback = cursor_b.fetchone()
         
         if result_fallback:
-            logger.warning(f"Product found with sku={sku}, warehouse_id={warehouse_id} but pack_id={pack_id} not matched")
+            logger.warning(f"Product found with sku={sku}, warehouse_id={warehouse_id_str} but pack_id={pack_id} not matched")
             return result_fallback[0]
         
-        logger.warning(f"No product found for sku={sku}, pack_id={pack_id}, warehouse_id={warehouse_id}")
+        logger.warning(f"No product found for sku={sku}, pack_id={pack_id}, warehouse_id={warehouse_id_str}")
         return None
         
     except Exception as e:
