@@ -164,7 +164,7 @@ def copy_order_details_simple(logger, start_date, end_date, warehouse_id):
         cursor_a = conn_a.cursor()
         cursor_b = conn_b.cursor()
         
-        # Get total order details to copy
+        # Get total order details to copy (only for orders that exist in order_main)
         cursor_a.execute("""
             SELECT COUNT(*) FROM order_detail od
             JOIN "order" o ON od.order_id = o.order_id
@@ -207,7 +207,24 @@ def copy_order_details_simple(logger, start_date, end_date, warehouse_id):
             if not batch_data:
                 break
             
-            # Insert batch into target - using simple INSERT without ON CONFLICT
+            # Filter out order details for orders that don't exist in order_main
+            filtered_batch = []
+            for row in batch_data:
+                order_id = row[9]  # order_id is at index 9
+                
+                # Check if order exists in order_main
+                cursor_b.execute("SELECT 1 FROM order_main WHERE order_id = %s", (order_id,))
+                if cursor_b.fetchone():
+                    filtered_batch.append(row)
+                else:
+                    logger.warning(f"Skipping order detail for order_id {order_id} (order not found in order_main)")
+            
+            if not filtered_batch:
+                logger.info(f"No valid order details in batch {offset//batch_size + 1}")
+                offset += batch_size
+                continue
+            
+            # Insert filtered batch into target
             insert_query = """
             INSERT INTO order_detail_main (
                 quantity_faktur, net_price, quantity_wms, quantity_delivery,
@@ -236,11 +253,11 @@ def copy_order_details_simple(logger, start_date, end_date, warehouse_id):
                 total_pcs = EXCLUDED.total_pcs
             """
             
-            cursor_b.executemany(insert_query, batch_data)
+            cursor_b.executemany(insert_query, filtered_batch)
             conn_b.commit()
             
-            copied_count += len(batch_data)
-            logger.info(f"Copied {len(batch_data)} order details (Total: {copied_count}/{total_details})")
+            copied_count += len(filtered_batch)
+            logger.info(f"Copied {len(filtered_batch)} order details (Total: {copied_count}/{total_details})")
             
             offset += batch_size
         
