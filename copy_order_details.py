@@ -65,7 +65,7 @@ def get_product_id_from_sku(logger, sku, pack_id, warehouse_id):
         
         # Get product_id based on sku, pack_id, and warehouse_id combination
         query = """
-        SELECT id 
+        SELECT mst_product_id 
         FROM mst_product_main 
         WHERE sku = %s AND pack_id = %s AND warehouse_id = %s
         LIMIT 1
@@ -79,7 +79,7 @@ def get_product_id_from_sku(logger, sku, pack_id, warehouse_id):
         
         # If not found with exact match, try with just sku and warehouse_id
         query_fallback = """
-        SELECT id 
+        SELECT mst_product_id 
         FROM mst_product_main 
         WHERE sku = %s AND warehouse_id = %s
         LIMIT 1
