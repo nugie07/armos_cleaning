@@ -51,7 +51,7 @@ def get_optimized_outbound_data(logger, start_date, end_date, warehouse_id):
         SELECT 
             oi.id,
             oi.product_id as sku,
-            oi.quantity as qty,
+            oi.qty,
             oi.uom,
             oi.pack_id,
             oi.line_id,
