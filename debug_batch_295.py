@@ -162,15 +162,19 @@ def find_problematic_records(logger, start_date, end_date, warehouse_id):
         if problematic_records:
             logger.warning(f"Found {len(problematic_records)} records with year 252025:")
             for record in problematic_records:
-                logger.warning(f"  Order ID: {record[0]}")
-                logger.warning(f"    faktur_id: {record[1]}")
-                logger.warning(f"    faktur_date: {record[2]}")
-                logger.warning(f"    delivery_date: {record[3]}")
-                logger.warning(f"    created_date: {record[4]}")
-                logger.warning(f"    updated_date: {record[5]}")
-                logger.warning(f"    customer_id: {record[6]}")
-                logger.warning(f"    warehouse_id: {record[7]}")
-                logger.warning("    ---")
+                try:
+                    logger.warning(f"  Order ID: {record[0]}")
+                    logger.warning(f"    faktur_id: {record[1]}")
+                    logger.warning(f"    faktur_date: {record[2]}")
+                    logger.warning(f"    delivery_date: {record[3]}")
+                    logger.warning(f"    created_date: {record[4]}")
+                    logger.warning(f"    updated_date: {record[5]}")
+                    logger.warning(f"    customer_id: {record[6]}")
+                    logger.warning(f"    warehouse_id: {record[7]}")
+                    logger.warning("    ---")
+                except IndexError as idx_error:
+                    logger.error(f"  Error accessing record fields: {idx_error}")
+                    logger.error(f"  Record has {len(record)} columns: {record}")
         else:
             logger.info("No records with year 252025 found in the specified range")
         
