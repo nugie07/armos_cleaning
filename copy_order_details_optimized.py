@@ -189,12 +189,21 @@ def insert_order_details_batch(logger, order_details_data, batch_size=1000):
             if not batch_values:
                 continue
             
-            # Simple INSERT query for batch (no UPSERT needed)
+            # UPSERT query for batch with correct constraint
             query = """
             INSERT INTO order_detail_main (
                 order_id, product_id, quantity_faktur, net_price, 
                 pack_id, line_id, origin_uom, origin_qty, total_ctn, total_pcs
             ) VALUES %s
+            ON CONFLICT (order_id, product_id, line_id) 
+            DO UPDATE SET
+                quantity_faktur = EXCLUDED.quantity_faktur,
+                net_price = EXCLUDED.net_price,
+                pack_id = EXCLUDED.pack_id,
+                origin_uom = EXCLUDED.origin_uom,
+                origin_qty = EXCLUDED.origin_qty,
+                total_ctn = EXCLUDED.total_ctn,
+                total_pcs = EXCLUDED.total_pcs
             """
             
             # Execute batch insert
