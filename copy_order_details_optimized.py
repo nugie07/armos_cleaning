@@ -14,7 +14,7 @@ import logging
 from datetime import datetime
 
 # Load environment variables
-load_dotenv('config.env')
+load_dotenv('.env')
 
 def setup_logging():
     """Setup logging configuration"""
