@@ -36,8 +36,8 @@ def setup_logging():
     )
     return logging.getLogger(__name__)
 
-def get_db_connection(database='A'):
-    """Get database connection"""
+def get_db_connection(database='B'):
+    """Get database connection - all tables are in Database B"""
     if database == 'A':
         conn = psycopg2.connect(
             host=os.getenv('DB_A_HOST'),
@@ -60,13 +60,13 @@ def get_outbound_data(logger, start_date, end_date, warehouse_id):
     """Get outbound data based on the specified query"""
     logger.info("=== GETTING OUTBOUND DATA ===")
     
-    conn_a = get_db_connection('A')
+    conn_b = get_db_connection('B')  # Use Database B for source data
     
     try:
-        cursor_a = conn_a.cursor()
+        cursor_b = conn_b.cursor()
         
         # Query to get outbound data based on document_reference
-        # Fixed: Use "order" table (not order_main) in Database A
+        # All tables are in Database B
         query = """
         SELECT 
             oi.id as outbound_item_id,
@@ -89,8 +89,8 @@ def get_outbound_data(logger, start_date, end_date, warehouse_id):
         ORDER BY o.faktur_date, oi.id
         """
         
-        cursor_a.execute(query, (start_date, end_date, warehouse_id))
-        results = cursor_a.fetchall()
+        cursor_b.execute(query, (start_date, end_date, warehouse_id))
+        results = cursor_b.fetchall()
         
         logger.info(f"Retrieved {len(results)} outbound items")
         
@@ -118,14 +118,14 @@ def get_outbound_data(logger, start_date, end_date, warehouse_id):
         logger.error(f"Error getting outbound data: {e}")
         return []
     finally:
-        conn_a.close()
+        conn_b.close()
 
 def get_product_net_price(logger, product_id, outbound_document_id):
     """Get product net price from outbound_items"""
-    conn_a = get_db_connection('A')
+    conn_b = get_db_connection('B')  # Use Database B
     
     try:
-        cursor_a = conn_a.cursor()
+        cursor_b = conn_b.cursor()
         
         query = """
         SELECT product_net_price 
@@ -134,8 +134,8 @@ def get_product_net_price(logger, product_id, outbound_document_id):
         LIMIT 1
         """
         
-        cursor_a.execute(query, (product_id, outbound_document_id))
-        result = cursor_a.fetchone()
+        cursor_b.execute(query, (product_id, outbound_document_id))
+        result = cursor_b.fetchone()
         
         return result[0] if result else None
         
@@ -143,14 +143,14 @@ def get_product_net_price(logger, product_id, outbound_document_id):
         logger.error(f"Error getting product net price for product_id {product_id}: {e}")
         return None
     finally:
-        conn_a.close()
+        conn_b.close()
 
 def get_conversion_data(logger, product_id, outbound_document_id):
     """Get conversion data from outbound_conversions"""
-    conn_a = get_db_connection('A')
+    conn_b = get_db_connection('B')  # Use Database B
     
     try:
-        cursor_a = conn_a.cursor()
+        cursor_b = conn_b.cursor()
         
         query = """
         SELECT numerator, denominator 
@@ -159,8 +159,8 @@ def get_conversion_data(logger, product_id, outbound_document_id):
         LIMIT 1
         """
         
-        cursor_a.execute(query, (product_id, outbound_document_id))
-        result = cursor_a.fetchone()
+        cursor_b.execute(query, (product_id, outbound_document_id))
+        result = cursor_b.fetchone()
         
         if result:
             return {'numerator': result[0], 'denominator': result[1]}
@@ -170,7 +170,7 @@ def get_conversion_data(logger, product_id, outbound_document_id):
         logger.error(f"Error getting conversion data for product_id {product_id}: {e}")
         return None
     finally:
-        conn_a.close()
+        conn_b.close()
 
 def calculate_quantities(logger, qty, uom, conversion_data):
     """Calculate quantities based on UOM and conversion rules"""
