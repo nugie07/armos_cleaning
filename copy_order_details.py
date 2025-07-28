@@ -152,10 +152,12 @@ def get_conversion_data(logger, product_id, outbound_document_id):
     try:
         cursor_b = conn_b.cursor()
         
+        # Correct relationship: outbound_items.id = outbound_conversions.outbound_item_id
         query = """
-        SELECT numerator, denominator 
-        FROM outbound_conversions 
-        WHERE product_id = %s AND outbound_document_id = %s
+        SELECT oc.numerator, oc.denominator 
+        FROM outbound_conversions oc
+        JOIN outbound_items oi ON oi.id = oc.outbound_item_id
+        WHERE oi.product_id = %s AND oi.outbound_document_id = %s
         LIMIT 1
         """
         
